@@ -125,6 +125,8 @@ HRESULT HandleExitReason( WHSE_PARTITION* Partition, WHSE_VP_EXIT_REASON ExitRea
 	//
 	switch ( ExitReason )
 	{
+	case WHvRunVpExitReasonUnrecoverableException:
+		break;
 	case WHvRunVpExitReasonNone:
 		hresult = S_OK;
 		break;

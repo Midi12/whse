@@ -33,7 +33,7 @@ enum WHSE_REGISTER : uint8_t {
     Gs,     Fs,     Es,
     Ds,     Cs,     Ss,
     Gdtr,   Idtr,
-    Cr0,    Cr3,    Cr4,
+    Cr0,    Cr2,    Cr3,    Cr4,
     Efer
 };
 
@@ -65,6 +65,7 @@ static constexpr WHSE_REGISTER_NAME g_registers[] = {
     WHvX64RegisterGdtr,
     WHvX64RegisterIdtr,
     WHvX64RegisterCr0,
+    WHvX64RegisterCr2,
     WHvX64RegisterCr3,
     WHvX64RegisterCr4,
     WHvX64RegisterEfer
