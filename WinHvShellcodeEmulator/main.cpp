@@ -5,21 +5,92 @@
 
 #include "Executor.hpp"
 
+#include <cstdlib>
 #include <cstdint>
-#include <iostream>
+#include <cstring>
+#include <cstdio>
 
 #define EXIT_WITH_MESSAGE( x ) \
 	{ \
-		std::cerr << x << std::endl; \
-		std::cerr << "Last hresult = " << std::hex << ::WhSeGetLastHresult() << std::endl; \
-		std::cerr << "Last error code = " << std::hex << ::WhSeGetLastError() << std::endl; \
+		printf( x ); \
+		printf( "Last hresult = %llx", WhSeGetLastHresult() ); \
+		printf( "Last error code = %llx", WhSeGetLastError() ); \
 		return EXIT_FAILURE; \
 	} \
 
 void Usage() {
-	std::cout << "- i <filename> binary file containing the shellcode to execute" << std::endl;
-	std::cout << "- m[kernel | user] kernel or user mode code" << std::endl;
-	std::cout << "- b <base> load the shellcode at a specified virtual address" << std::endl;
+	printf( "-i <filename> binary file containing the shellcode to execute" );
+	printf( "-m <kernel | user> kernel or user mode code" );
+	printf( "-b <base> load the shellcode at a specified virtual address" );
+}
+
+// Read input file
+//
+void ReadInputFile( const char* Filename, uint8_t** Code, size_t* CodeSize ) {
+	// Open the input file
+	//
+	FILE* fp = fopen( Filename, "rb" );
+	if ( fp == nullptr )
+		return;
+
+	// Get the file size
+	//
+	fseek( fp, 0, SEEK_END );
+	*CodeSize = ftell( fp );
+	*Code = reinterpret_cast< uint8_t * >( malloc( *CodeSize ) );
+
+	fseek( fp, 0, SEEK_SET );
+
+	constexpr uint32_t bufferSize = 4096;
+	uint8_t buffer[bufferSize] = { 0 };
+
+	size_t size = *CodeSize;
+	while ( size - bufferSize > bufferSize) {
+		fread( buffer, bufferSize, 1, fp );
+		size -= bufferSize;
+	}
+
+    fread( buffer, bufferSize, 1, fp );
+
+	fclose( fp );
+}
+
+// Parse command line :
+// -i <filename> binary file containing the shellcode to execute
+// -m [kernel|user] kernel or user mode code
+// -b <base> load the shellcode at a specified virtual address
+//
+bool ParseCommandLine( int argc, char* const argv[], EXECUTOR_OPTIONS& options ) {
+	option_t* options_ = nullptr;
+	options_ = GetOptList( argc, argv, "i:m:b:?" );
+	
+	if ( options_->option == '?' ) {
+		Usage();
+		return false;
+	}
+
+	while ( options_ != nullptr ) {
+		option_t* option_ = options_;
+		options_ = options_->next;
+
+		if ( option_->option == 'i' ) {
+			ReadInputFile( option_->argument, &options.Code, &options.CodeSize );
+		} else if ( option_->option == 'm' ) {
+			if ( !strcmp( option_->argument, "user" ) ) {
+				options.Mode = PROCESSOR_MODE::UserMode;
+			} else if ( !strcmp( option_->argument, "kernel" ) ) {
+				options.Mode = PROCESSOR_MODE::KernelMode;
+			}
+		} else if ( option_->option == 'b' ) {
+			options.BaseAddress =
+				*reinterpret_cast< uint16_t* >( option_->argument ) == static_cast< uint16_t >('x0')
+				? strtol( option_->argument, nullptr, 0 )
+				: strtol( option_->argument, nullptr, 16 );
+		}
+	}
+
+	FreeOptList( options_ );
+	return true;
 }
 
 // 0:  48 c7 c0 37 13 00 00    mov    rax, 0x1337
@@ -29,31 +100,15 @@ int main( int argc, char* const argv[], char* const envp[] ) {
 	if ( !WhSeIsHypervisorPresent() )
 		EXIT_WITH_MESSAGE( "Hypervisor not present" );
 
-	// Parse command line
-	//
-	// -i <filename> binary file containing the shellcode to execute
-	// -m [kernel|user] kernel or user mode code
-	// -b <base> load the shellcode at a specified virtual address
-
-	option_t* options = nullptr;
-	options = GetOptList( argc, argv, "i:m:b:?" );
+	EXECUTOR_OPTIONS options { };
+	if ( !ParseCommandLine( argc, argv, options ))
+		return EXIT_SUCCESS;
 	
-	while ( options != nullptr ) {
-		option_t* option = options;
-		options = options->next;
-
-		if ( option->option == '?' ) {
-			Usage();
-			break;
-		}
-	}
-
-	FreeOptList( options );
-
-
 	// Execute shellcode on a virtualized processor
 	//
-	Execute( testcode, sizeof( decltype( testcode ) ) );
+	Execute( options );
+
+	free( options.Code );
 
 	return EXIT_SUCCESS;
 }

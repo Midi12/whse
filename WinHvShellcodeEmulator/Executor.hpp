@@ -20,8 +20,15 @@ typedef struct EXECUTOR_PARAMS {
 	PROCESSOR_MODE Mode;
 };
 
+typedef struct EXECUTOR_OPTIONS {
+	uint8_t* Code;
+    size_t CodeSize;
+	uintptr_t BaseAddress;
+	PROCESSOR_MODE Mode;
+};
+
 // Execute a shellcode through a virtual processor
 //
-DWORD WINAPI Execute( const uint8_t* Shellcode, const size_t Size );
+DWORD WINAPI Execute( const EXECUTOR_OPTIONS& options );
 
 #endif // !EXECUTOR_HPP

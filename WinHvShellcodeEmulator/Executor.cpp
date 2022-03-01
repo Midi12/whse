@@ -214,7 +214,7 @@ DWORD WINAPI ExecuteThread( LPVOID lpParameter ) {
 
 // Execute a shellcode through a virtual processor
 //
-DWORD WINAPI Execute( const uint8_t* Shellcode, const size_t Size ) {
+DWORD WINAPI Execute( const EXECUTOR_OPTIONS& options ) {
 	// Create partition
 	//
 	WHSE_PARTITION* partition = nullptr;
