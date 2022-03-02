@@ -50,7 +50,7 @@ void ReadInputFile( const char* Filename, uint8_t** Code, size_t* CodeSize ) {
 		size -= bufferSize;
 	}
 
-    fread( buffer, bufferSize, 1, fp );
+    fread( buffer, size - bufferSize, 1, fp );
 
 	fclose( fp );
 }
@@ -83,7 +83,7 @@ bool ParseCommandLine( int argc, char* const argv[], EXECUTOR_OPTIONS& options )
 			}
 		} else if ( option_->option == 'b' ) {
 			options.BaseAddress =
-				*reinterpret_cast< uint16_t* >( option_->argument ) == static_cast< uint16_t >('x0')
+				*reinterpret_cast< uint16_t* >( option_->argument ) == static_cast< uint16_t >(0x3078) // '0x'
 				? strtol( option_->argument, nullptr, 0 )
 				: strtol( option_->argument, nullptr, 16 );
 		}
@@ -93,9 +93,6 @@ bool ParseCommandLine( int argc, char* const argv[], EXECUTOR_OPTIONS& options )
 	return true;
 }
 
-// 0:  48 c7 c0 37 13 00 00    mov    rax, 0x1337
-uint8_t testcode[] = { 0x48, 0xC7, 0xC0, 0x37, 0x13, 0x00, 0x00 };
-
 int main( int argc, char* const argv[], char* const envp[] ) {
 	if ( !WhSeIsHypervisorPresent() )
 		EXIT_WITH_MESSAGE( "Hypervisor not present" );
@@ -103,7 +100,15 @@ int main( int argc, char* const argv[], char* const envp[] ) {
 	EXECUTOR_OPTIONS options { };
 	if ( !ParseCommandLine( argc, argv, options ))
 		return EXIT_SUCCESS;
-	
+
+	if ( options.Code == nullptr || options.CodeSize == 0 )
+		EXIT_WITH_MESSAGE( "No shellcode data" );
+
+	if ( options.Mode == PROCESSOR_MODE::None ) {
+		printf( "No processor mode specified, defaulting to 'UserMode'" );
+		options.Mode = PROCESSOR_MODE::UserMode;
+	}
+
 	// Execute shellcode on a virtualized processor
 	//
 	Execute( options );
