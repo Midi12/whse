@@ -3,13 +3,13 @@
 #include <windows.h>
 #include <winhvplatform.h>
 
-#include <iostream>
+#include <stdio.h>
 
 #define EXIT_WITH_MESSAGE( x ) \
 	{ \
-		std::cerr << x << std::endl; \
-		std::cerr << "Last hresult = " << std::hex << ::WhSeGetLastHresult() << std::endl; \
-		std::cerr << "Last error code = " << std::hex << ::WhSeGetLastError() << std::endl; \
+		printf( x ); \
+		printf( "Last hresult = %llx", WhSeGetLastHresult() ); \
+		printf( "Last error code = %llx", WhSeGetLastError() ); \
 		return EXIT_FAILURE; \
 	} \
 
@@ -165,15 +165,16 @@ DWORD WINAPI ExecuteThread( LPVOID lpParameter ) {
 		// Setup processor state for user mode
 		//
 		case UserMode:
-
 			// Setup segment registers
 			//
-			registers[ Cs ].Segment.Selector = 0x33;
-			registers[ Cs ].Segment.DescriptorPrivilegeLevel = 3;
+			auto dpl = 3;
+
+			registers[ Cs ].Segment.Selector = ( 0x30 | dpl );
+			registers[ Cs ].Segment.DescriptorPrivilegeLevel = dpl;
 			registers[ Cs ].Segment.Long = 1;
 
-			registers[ Ss ].Segment.Selector = 0x2B;
-			registers[ Ss ].Segment.DescriptorPrivilegeLevel = 3;
+			registers[ Ss ].Segment.Selector = ( 0x28 | dpl );
+			registers[ Ss ].Segment.DescriptorPrivilegeLevel = dpl;
 			registers[ Ds ] = registers[ Ss ];
 			registers[ Es ] = registers[ Ss ];
 			registers[ Gs ] = registers[ Ss ];
@@ -189,7 +190,8 @@ DWORD WINAPI ExecuteThread( LPVOID lpParameter ) {
 	registers[ Rip ].Reg64 = params->Entrypoint;
 	registers[ Rsp ].Reg64 = params->Stack;
 
-	// if bit
+	// Set IF bit
+	//
 	registers[ Rflags ].Reg64 = MAKE_RFLAGS( 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 );
 
 	if ( FAILED( WhSeSetProcessorRegisters( partition, registers ) ) )
@@ -221,13 +223,13 @@ DWORD WINAPI Execute( const EXECUTOR_OPTIONS& options ) {
 	if ( FAILED( WhSeCreatePartition( &partition ) ) )
 		EXIT_WITH_MESSAGE( "Failed to create hypervisor partition" );
 
-	std::cout << "Hypervisor partition created " << std::endl;
-	std::cout << "Partition = " << ( void* ) partition << std::endl;
-	std::cout << "Partition->Handle = " << ( void* ) partition->Handle << std::endl;
+	printf( "Hypervisor partition created " );
+	printf( "Partition = %p", reinterpret_cast< void* >( partition ) );
+	printf( "Partition->Handle = %p", reinterpret_cast< void* >( partition->Handle ) );
 
 	// Create the processor
 	// 
-	if ( FAILED( ::WhSeCreateProcessor( partition ) ) )
+	if ( FAILED( WhSeCreateProcessor( partition ) ) )
 		EXIT_WITH_MESSAGE( "Failed to create the processor" );
 
 	// Initialize paging
@@ -245,17 +247,17 @@ DWORD WINAPI Execute( const EXECUTOR_OPTIONS& options ) {
 
 	// Allocate code
 	//
-	auto shellcode = ::VirtualAlloc( nullptr, ALIGN_PAGE( Size ), MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE );
+	auto shellcode = ::VirtualAlloc( nullptr, ALIGN_PAGE( options.CodeSize ), MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE );
 	if ( shellcode == nullptr )
 		EXIT_WITH_MESSAGE( "Failed to allocate shellcode" );
 
-	::CopyMemory( shellcode, Shellcode, Size );
+	::CopyMemory( shellcode, options.Code, options.CodeSize );
 
 	constexpr uintptr_t codeGva = 0x10000;
-	if( FAILED( WhSeMapHostToGuestVirtualMemory( partition, shellcode, codeGva, ALIGN_PAGE( Size ), WHvMapGpaRangeFlagRead | WHvMapGpaRangeFlagWrite | WHvMapGpaRangeFlagExecute ) ) )
+	if( FAILED( WhSeMapHostToGuestVirtualMemory( partition, shellcode, codeGva, ALIGN_PAGE( options.CodeSize ), WHvMapGpaRangeFlagRead | WHvMapGpaRangeFlagWrite | WHvMapGpaRangeFlagExecute ) ) )
 		EXIT_WITH_MESSAGE( "Failed to map shellcode" );
 
-	std::cout << "Created processor " << partition->VirtualProcessor.Index << std::endl;
+	printf( "Created processor %d", partition->VirtualProcessor.Index );
 
 	// Run the processor
 	//
@@ -263,21 +265,22 @@ DWORD WINAPI Execute( const EXECUTOR_OPTIONS& options ) {
 		.Entrypoint = codeGva,
 		.Stack = stackGva,
 		.Partition = partition,
-		.Mode = PROCESSOR_MODE::UserMode
+		.Mode = options.Mode
 	};
 
-	std::cout << "Starting the processor ..." << std::endl;
+	printf( "Starting the processor ..." );
 
 	auto thread = ::CreateThread( nullptr, 0, ExecuteThread, &params, 0, nullptr );
 	if ( thread == nullptr )
 		EXIT_WITH_MESSAGE( "Failed to start the processor thread" );
 
-	// Wait until
+	// Wait until execution finishes or an unhandled vcpu exit
+	//
 	::WaitForSingleObject( thread, INFINITE );
 	
 	uint32_t exitCode;
 	::GetExitCodeThread( thread, reinterpret_cast< LPDWORD >( &exitCode ) );
-	std::cout << "Run thread exited with reason " << exitCode << std::endl;
+	printf( "Run thread exited with reason %d", exitCode );
 
 	::CloseHandle( thread );
 
@@ -286,7 +289,7 @@ DWORD WINAPI Execute( const EXECUTOR_OPTIONS& options ) {
 	if ( FAILED( ::WhSeDeletePartition( partition ) ) )
 		EXIT_WITH_MESSAGE( "Failed to delete hypervisor partition" );
 
-	std::cout << "Deleted hypervisor partition" << std::endl;
+	printf( "Deleted hypervisor partition" );
 
 	return EXIT_SUCCESS;
 }

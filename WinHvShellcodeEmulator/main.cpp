@@ -13,8 +13,8 @@
 #define EXIT_WITH_MESSAGE( x ) \
 	{ \
 		printf( x ); \
-		printf( "Last hresult = %llx", WhSeGetLastHresult() ); \
-		printf( "Last error code = %llx", WhSeGetLastError() ); \
+		printf( "Last hresult = %llx", static_cast< unsigned long long >( WhSeGetLastHresult() ) ); \
+		printf( "Last error code = %llx", static_cast< unsigned long long >( WhSeGetLastError() ) ); \
 		return EXIT_FAILURE; \
 	} \
 
@@ -42,15 +42,17 @@ void ReadInputFile( const char* Filename, uint8_t** Code, size_t* CodeSize ) {
 	fseek( fp, 0, SEEK_SET );
 
 	constexpr uint32_t bufferSize = 4096;
-	uint8_t buffer[bufferSize] = { 0 };
+	uint8_t buffer[ bufferSize ] = { 0 };
 
 	size_t size = *CodeSize;
 	while ( size - bufferSize > bufferSize) {
 		fread( buffer, bufferSize, 1, fp );
 		size -= bufferSize;
+		memcpy( *Code, buffer, bufferSize );
 	}
 
-    fread( buffer, size - bufferSize, 1, fp );
+	fread( buffer, size, 1, fp );
+	memcpy( *Code, buffer, size );
 
 	fclose( fp );
 }

@@ -1,2 +1,3 @@
+-std=c++2b
 -I
 /usr/include/wine-development/windows
