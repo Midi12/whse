@@ -151,34 +151,33 @@ DWORD WINAPI ExecuteThread( LPVOID lpParameter ) {
 	if ( FAILED( WhSeGetProcessorRegisters( partition, registers ) ) )
 		return -1;
 
+	int ring;
+	int codeSelector;
+	int dataSelector;
+
 	// Setup processor
 	//
 	switch ( params->Mode ) {
 		using enum PROCESSOR_MODE;
-		/*
+		
 		// Setup processor state for kernel mode 
 		//
 		case KernelMode:
+			{
+				ring = 0;
+				codeSelector = 0x10;
+				dataSelector = 0x18;
+			}
 			break;
-		*/
 
 		// Setup processor state for user mode
 		//
 		case UserMode:
-			// Setup segment registers
-			//
-			auto dpl = 3;
-
-			registers[ Cs ].Segment.Selector = ( 0x30 | dpl );
-			registers[ Cs ].Segment.DescriptorPrivilegeLevel = dpl;
-			registers[ Cs ].Segment.Long = 1;
-
-			registers[ Ss ].Segment.Selector = ( 0x28 | dpl );
-			registers[ Ss ].Segment.DescriptorPrivilegeLevel = dpl;
-			registers[ Ds ] = registers[ Ss ];
-			registers[ Es ] = registers[ Ss ];
-			registers[ Gs ] = registers[ Ss ];
-
+			{
+				ring = 3;
+				codeSelector = 0x30;
+				dataSelector = 0x28;
+			}
 			break;
 
 		// Unknown layout : exit
@@ -186,6 +185,18 @@ DWORD WINAPI ExecuteThread( LPVOID lpParameter ) {
 		default:
 			return -1;
 	}
+
+	// Setup segment registers
+	//
+	registers[ Cs ].Segment.Selector = ( codeSelector | ring );
+	registers[ Cs ].Segment.DescriptorPrivilegeLevel = ring;
+	registers[ Cs ].Segment.Long = 1;
+
+	registers[ Ss ].Segment.Selector = ( dataSelector | ring );
+	registers[ Ss ].Segment.DescriptorPrivilegeLevel = ring;
+	registers[ Ds ] = registers[ Ss ];
+	registers[ Es ] = registers[ Ss ];
+	registers[ Gs ] = registers[ Ss ];
 
 	registers[ Rip ].Reg64 = params->Entrypoint;
 	registers[ Rsp ].Reg64 = params->Stack;
