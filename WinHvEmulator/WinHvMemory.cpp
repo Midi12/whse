@@ -174,9 +174,9 @@ HRESULT WhSeInitializeMemoryLayout( WHSE_PARTITION* Partition ) {
 	if ( ::GetPhysicallyInstalledSystemMemory( &totalMemInKib ) == FALSE && totalMemInKib == 0 )
 		return WhSeGetLastHresult();
 
-	Partition->MemoryLayout.LowestAddress = 0x00000000'00000000;
-	Partition->MemoryLayout.HighestAddress = ( totalMemInKib << 10 ) - 1;
-	Partition->MemoryLayout.SizeInBytes = totalMemInKib << 10;
+	Partition->MemoryLayout.PhysicalAddressSpace.LowestAddress = 0x00000000'00000000;
+	Partition->MemoryLayout.PhysicalAddressSpace.HighestAddress = ( totalMemInKib << 10 ) - 1;
+	Partition->MemoryLayout.PhysicalAddressSpace.SizeInBytes = totalMemInKib << 10;
 
 	uintptr_t pml4Address = 0;
 	Partition->MemoryLayout.Pml4HostVa = nullptr;
