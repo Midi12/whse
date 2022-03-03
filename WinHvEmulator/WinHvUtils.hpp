@@ -1,6 +1,9 @@
 #ifndef WINHVUTILS_HPP
 #define WINHVUTILS_HPP
 
+#include <cstddef>
+#include <cstdint>
+
 constexpr size_t operator ""KiB( size_t x ) {
 	return 1024 * x;
 }

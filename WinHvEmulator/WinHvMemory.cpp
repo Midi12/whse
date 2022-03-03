@@ -168,9 +168,7 @@ HRESULT WhSeInitializeMemoryLayout( WHSE_PARTITION* Partition ) {
 	Partition->PhysicalMemoryLayout.LowestAddress = 0x00000000'00000000;
 	Partition->PhysicalMemoryLayout.HighestAddress = ( totalMemInKib << 10 ) - 1;
 	Partition->PhysicalMemoryLayout.SizeInBytes = totalMemInKib << 10;
-	
-	// Set the PML4 physical address
-	//
+
 	uintptr_t pml4Address = 0;
 	Partition->PhysicalMemoryLayout.Pml4HostVa = nullptr;
 
@@ -181,9 +179,7 @@ HRESULT WhSeInitializeMemoryLayout( WHSE_PARTITION* Partition ) {
 		return hresult;
 
 	Partition->PhysicalMemoryLayout.Pml4PhysicalAddress = pml4Address;
-	
-	// Update CR3 register on our virtual processor
-	//
+
 	auto registers = Partition->VirtualProcessor.Registers;
 	hresult = WhSeGetProcessorRegisters( Partition, registers );
 	if ( FAILED( hresult ) )

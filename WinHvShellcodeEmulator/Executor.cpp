@@ -243,10 +243,14 @@ DWORD WINAPI Execute( const EXECUTOR_OPTIONS& options ) {
 	if ( FAILED( WhSeCreateProcessor( partition ) ) )
 		EXIT_WITH_MESSAGE( "Failed to create the processor" );
 
+	printf( "Created processor %d", partition->VirtualProcessor.Index );
+
 	// Initialize paging
 	//
 	if ( FAILED( WhSeInitializeMemoryLayout( partition ) ) )
 		EXIT_WITH_MESSAGE( "Failed to initialize memory layout" );
+
+	printf( "Initialized paging (CR3 = %llx)", static_cast< unsigned long long >( partition->PhysicalMemoryLayout.Pml4PhysicalAddress ) );
 
 	// Allocate stack
 	//
@@ -256,11 +260,13 @@ DWORD WINAPI Execute( const EXECUTOR_OPTIONS& options ) {
 	if ( FAILED( WhSeAllocateGuestVirtualMemory( partition, &stackHva, stackGva, &stackSize, WHvMapGpaRangeFlagRead | WHvMapGpaRangeFlagWrite ) ) )
 		EXIT_WITH_MESSAGE( "Failed to allocate stack" );
 
+	printf( "Allocated stack space %llx (size = %llx)", static_cast< unsigned long long >( stackGva ), static_cast< unsigned long long >( stackSize ) );
+
 	// Allocate code
 	//
 	auto shellcode = ::VirtualAlloc( nullptr, ALIGN_PAGE( options.CodeSize ), MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE );
 	if ( shellcode == nullptr )
-		EXIT_WITH_MESSAGE( "Failed to allocate shellcode" );
+		EXIT_WITH_MESSAGE( "Failed to allocate shellcode backing memory (host)" );
 
 	::CopyMemory( shellcode, options.Code, options.CodeSize );
 
@@ -268,7 +274,7 @@ DWORD WINAPI Execute( const EXECUTOR_OPTIONS& options ) {
 	if( FAILED( WhSeMapHostToGuestVirtualMemory( partition, shellcode, codeGva, ALIGN_PAGE( options.CodeSize ), WHvMapGpaRangeFlagRead | WHvMapGpaRangeFlagWrite | WHvMapGpaRangeFlagExecute ) ) )
 		EXIT_WITH_MESSAGE( "Failed to map shellcode" );
 
-	printf( "Created processor %d", partition->VirtualProcessor.Index );
+	printf( "Allocated code memory %llx (size = %llx, allocated = %llx)", static_cast< unsigned long long >( codeGva ), static_cast< unsigned long long >( options.CodeSize ), static_cast< unsigned long long >( ALIGN_PAGE( options.CodeSize ) ) );
 
 	// Run the processor
 	//
@@ -297,7 +303,7 @@ DWORD WINAPI Execute( const EXECUTOR_OPTIONS& options ) {
 
 	// Cleanup partition
 	//
-	if ( FAILED( ::WhSeDeletePartition( partition ) ) )
+	if ( FAILED( WhSeDeletePartition( partition ) ) )
 		EXIT_WITH_MESSAGE( "Failed to delete hypervisor partition" );
 
 	printf( "Deleted hypervisor partition" );
