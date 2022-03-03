@@ -1,6 +1,7 @@
 #ifndef WINHVDEFS_HPP
 #define WINHVDEFS_HPP
 
+#include "winnt.h"
 #include <windows.h>
 #include <winhvplatform.h>
 
@@ -81,25 +82,36 @@ typedef struct WHSE_VIRTUAL_PROCESSOR {
     WHSE_REGISTERS Registers;
 };
 
+typedef struct WHSE_VANODE : SLIST_ENTRY {
+    PVOID VirtualAddress;
+    size_t Size;
+};
+
 typedef struct WHSE_PFNDBNODE : SLIST_ENTRY {
     uintptr_t PageFrameNumber;
     PVOID HostVa;
 };
 
-typedef struct WHSE_PHYSICAL_MEMORY_LAYOUT_DESC {
+typedef struct WHSE_ADDRESS_SPACE_BOUNDARY {
     uintptr_t LowestAddress;
     uintptr_t HighestAddress;
     size_t SizeInBytes;
+};
+
+typedef struct WHSE_MEMORY_LAYOUT_DESC {
+    WHSE_ADDRESS_SPACE_BOUNDARY PhysicalAddressSpace;
     uintptr_t Pml4PhysicalAddress;
     PVOID Pml4HostVa;
     PSLIST_HEADER PageFrameNumberNodes;
+    PSLIST_HEADER AllocatedVirtualSpaceNodes;
+    WHSE_ADDRESS_SPACE_BOUNDARY VirtualAddressSpace;
 };
 
 typedef WHV_PARTITION_HANDLE WHSE_PARTITION_HANDLE;
 
 typedef struct WHSE_PARTITION {
     WHSE_PARTITION_HANDLE Handle;
-    WHSE_PHYSICAL_MEMORY_LAYOUT_DESC PhysicalMemoryLayout;
+    WHSE_MEMORY_LAYOUT_DESC MemoryLayout;
     WHSE_VIRTUAL_PROCESSOR VirtualProcessor;
 };
 

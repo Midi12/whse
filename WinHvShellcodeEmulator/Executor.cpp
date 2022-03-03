@@ -1,5 +1,6 @@
 #include "Executor.hpp"
 #include "winbase.h"
+#include "winnt.h"
 
 #include <windows.h>
 #include <winhvplatform.h>
@@ -227,11 +228,27 @@ DWORD WINAPI ExecuteThread( LPVOID lpParameter ) {
 }
 
 DWORD Cleanup( WHSE_PARTITION** Partition ) {
+	// Release all Guest VAs backing host memory
+	//
+	auto vaList = ( *Partition )->MemoryLayout.AllocatedVirtualSpaceNodes;
+	if ( vaList != nullptr ) {
+		auto first = reinterpret_cast< WHSE_VANODE* >( ::RtlFirstEntrySList( vaList ) );
+		if ( first == nullptr )
+			EXIT_WITH_MESSAGE( "No element in the VA Node DB" );
+
+		auto current = first;
+		while ( current != nullptr ) {
+			::VirtualFree( current->VirtualAddress, 0, MEM_RELEASE );
+
+			current = reinterpret_cast< WHSE_VANODE* >( current->Next );
+		}
+	}
+
 	// Release all the backing memory allocated on the host side
 	//
-	auto pfndb = ( *Partition )->PageFrameNumberNodes;
-	if ( pfndb != nullptr ) {
-		auto first = reinterpret_cast< WHSE_PFNDBNODE* >( ::RtlFirstEntrySList( Partition->PhysicalMemoryLayout.PageFrameNumberNodes ) );
+	auto pfnDb = ( *Partition )->MemoryLayout.PageFrameNumberNodes;
+	if ( pfnDb != nullptr ) {
+		auto first = reinterpret_cast< WHSE_PFNDBNODE* >( ::RtlFirstEntrySList( pfnDb ) );
 		if ( first == nullptr )
 			EXIT_WITH_MESSAGE( "No element in the PFN DB" );
 
@@ -245,7 +262,7 @@ DWORD Cleanup( WHSE_PARTITION** Partition ) {
 
 	// Release the backing memory from the PML4 directory
 	//
-	auto pml4Hva = ( *Partition )->Pml4HostVa;
+	auto pml4Hva = ( *Partition )->MemoryLayout.Pml4HostVa;
 	if ( pml4Hva == nullptr )
 		EXIT_WITH_MESSAGE( "No PML4 HVA" );
 
@@ -291,7 +308,28 @@ DWORD WINAPI Execute( const EXECUTOR_OPTIONS& options ) {
 	if ( FAILED( WhSeInitializeMemoryLayout( partition ) ) )
 		EXIT_WITH_MESSAGE( "Failed to initialize memory layout" );
 
-	printf( "Initialized paging (CR3 = %llx)", static_cast< unsigned long long >( partition->PhysicalMemoryLayout.Pml4PhysicalAddress ) );
+	printf( "Initialized paging (CR3 = %llx)", static_cast< unsigned long long >( partition->MemoryLayout.Pml4PhysicalAddress ) );
+
+	uintptr_t lowestAddress = 0;
+	uintptr_t highestAddress = 0;
+
+	// Setup Virtual Address Space boundaries
+	//
+	switch ( options.Mode ) {
+		using enum PROCESSOR_MODE;
+		case UserMode:
+			lowestAddress = ;
+			highestAddress = ;
+			break;
+		case KernelMode:
+			break;
+		default:
+			EXIT_WITH_MESSAGE( "Unsupported mode" );
+	}
+
+	partition->MemoryLayout.VirtualAddressSpace.LowestAddress = lowestAddress;
+	partition->MemoryLayout.VirtualAddressSpace.HighestAddress = highestAddress;
+	partition->MemoryLayout.VirtualAddressSpace.SizeInBytes = highestAddress - lowestAddress;
 
 	// Allocate stack
 	//

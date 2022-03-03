@@ -1,7 +1,11 @@
 #include "WinHvMemoryInternal.hpp"
 #include "WinHvMemory.hpp"
 #include "WinHvUtils.hpp"
+#include "winbase.h"
+#include "winerror.h"
+#include "winnt.h"
 
+#include <cstdint>
 #include <windows.h>
 
 
@@ -31,7 +35,7 @@ HRESULT WhSiGetNextPhysicalPages( WHSE_PARTITION* Partition, size_t NumberOfPage
 
 	// this is a very naive approach but okay for our small emulation goal
 	//
-	if ( physicalAddress >= Partition->PhysicalMemoryLayout.HighestAddress )
+	if ( physicalAddress >= Partition->MemoryLayout.PhysicalAddressSpace.HighestAddress )
 		return HRESULT_FROM_WIN32( ERROR_OUTOFMEMORY );
 
 	s_nextPhysicalAddress += ( PAGE_SIZE * NumberOfPages );
@@ -95,7 +99,7 @@ HRESULT WhSpInsertPageTableEntry( WHSE_PARTITION* Partition, PMMPTE_HARDWARE Par
 	node->PageFrameNumber = pte.PageFrameNumber;
 	node->HostVa = hva;
 
-	::InterlockedPushEntrySList( Partition->PhysicalMemoryLayout.PageFrameNumberNodes, node );
+	::InterlockedPushEntrySList( Partition->MemoryLayout.PageFrameNumberNodes, node );
 
 	return hresult;
 }
@@ -105,7 +109,7 @@ HRESULT WhSpInsertPageTableEntry( WHSE_PARTITION* Partition, PMMPTE_HARDWARE Par
 HRESULT WhSiSetupPaging( WHSE_PARTITION* Partition, uintptr_t* Pml4PhysicalAddress ) {
 	// Check if already initialized
 	//
-	if ( Partition->PhysicalMemoryLayout.Pml4HostVa != nullptr )
+	if ( Partition->MemoryLayout.Pml4HostVa != nullptr )
 		return HRESULT_FROM_WIN32( ERROR_ALREADY_INITIALIZED );
 
 	PSLIST_HEADER pfnNodes = reinterpret_cast< PSLIST_HEADER >( ::HeapAlloc( ::GetProcessHeap(), HEAP_ZERO_MEMORY, sizeof( decltype( *pfnNodes ) ) ) );
@@ -113,7 +117,7 @@ HRESULT WhSiSetupPaging( WHSE_PARTITION* Partition, uintptr_t* Pml4PhysicalAddre
 		return HRESULT_FROM_WIN32( ERROR_OUTOFMEMORY );
 
 	::InitializeSListHead( pfnNodes );
-	Partition->PhysicalMemoryLayout.PageFrameNumberNodes = pfnNodes;
+	Partition->MemoryLayout.PageFrameNumberNodes = pfnNodes;
 	
 	// Allocate PML4 on physical memory
 	//
@@ -124,7 +128,7 @@ HRESULT WhSiSetupPaging( WHSE_PARTITION* Partition, uintptr_t* Pml4PhysicalAddre
 	if ( FAILED( hresult ) )
 		return hresult;
 
-	Partition->PhysicalMemoryLayout.Pml4HostVa = pml4Hva;
+	Partition->MemoryLayout.Pml4HostVa = pml4Hva;
 
 	auto pml4 = reinterpret_cast< PMMPTE_HARDWARE >( pml4Hva );
 
@@ -139,11 +143,20 @@ HRESULT WhSiSetupPaging( WHSE_PARTITION* Partition, uintptr_t* Pml4PhysicalAddre
 
 	*Pml4PhysicalAddress = pml4Gpa;
 
+	// Initialize Guest Virtual Address Space allocations tracking
+	//
+	PSLIST_HEADER vaList = reinterpret_cast< PSLIST_HEADER >( ::HeapAlloc( ::GetProcessHeap(), HEAP_ZERO_MEMORY, sizeof( decltype( *vaList ) ) ) );
+	if ( vaList == nullptr )
+		return HRESULT_FROM_WIN32( ERROR_OUTOFMEMORY );
+
+	::InitializeSListHead( vaList );
+	Partition->MemoryLayout.AllocatedVirtualSpaceNodes = vaList;
+	
 	return hresult;
 }
 
 HRESULT WhSpLookupHVAFromPFN( WHSE_PARTITION* Partition, uintptr_t PageFrameNumber, PVOID* HostVa ) {
-	auto first = reinterpret_cast< WHSE_PFNDBNODE* >( ::RtlFirstEntrySList( Partition->PhysicalMemoryLayout.PageFrameNumberNodes ) );
+	auto first = reinterpret_cast< WHSE_PFNDBNODE* >( ::RtlFirstEntrySList( Partition->MemoryLayout.PageFrameNumberNodes ) );
 	if ( first == nullptr )
 		return HRESULT_FROM_WIN32( ERROR_NO_MORE_ITEMS );
 
@@ -178,7 +191,7 @@ HRESULT WhSiInsertPageTableEntry( WHSE_PARTITION* Partition, uintptr_t VirtualAd
 
 	// Search entry in PML4
 	// 
-	auto pml4e = reinterpret_cast< PMMPTE_HARDWARE >( Partition->PhysicalMemoryLayout.Pml4HostVa )[ pml4Idx ];
+	auto pml4e = reinterpret_cast< PMMPTE_HARDWARE >( Partition->MemoryLayout.Pml4HostVa )[ pml4Idx ];
 	if ( pml4e.Valid == FALSE ) {
 		// Shouldn't happen as we initialized all PLM4 entries upfront
 		//
@@ -256,6 +269,43 @@ HRESULT WhSiInsertPageTableEntry( WHSE_PARTITION* Partition, uintptr_t VirtualAd
 
 		pte = pt[ ptIdx ];
 	}
+
+	return S_OK;
+}
+
+// Find a suitable Guest VA
+//
+HRESULT WhSiFindBestGVA( WHSE_PARTITION* Partition, uintptr_t* GuestVa, size_t Size ) {
+	if ( Partition == nullptr )
+		return HRESULT_FROM_WIN32( ERROR_INVALID_PARAMETER );
+
+	if ( GuestVa == nullptr )
+		return HRESULT_FROM_WIN32( ERROR_INVALID_PARAMETER );
+
+	auto vaList = Partition->MemoryLayout.AllocatedVirtualSpaceNodes;
+	if ( vaList == nullptr )
+		return HRESULT_FROM_WIN32( PEERDIST_ERROR_NOT_INITIALIZED );
+
+	auto first = reinterpret_cast< WHSE_VANODE* >( ::RtlFirstEntrySList( vaList ) );
+	if ( first == nullptr )
+		return HRESULT_FROM_WIN32( ERROR_NO_MORE_ITEMS );
+
+	auto current = first;
+	while ( current != nullptr ) {
+		current = reinterpret_cast< WHSE_VANODE* >( current->Next );
+	}
+
+	auto va = ALIGN_PAGE( reinterpret_cast< uintptr_t >( current->VirtualAddress ) + current->Size );
+
+	WHSE_VANODE* node = reinterpret_cast< WHSE_VANODE* >( ::HeapAlloc( ::GetProcessHeap(), HEAP_ZERO_MEMORY, sizeof( decltype( *node ) ) ) );
+	if ( node == nullptr )
+		return HRESULT_FROM_WIN32( ERROR_OUTOFMEMORY );
+
+	node->VirtualAddress = reinterpret_cast< PVOID >( va );
+	node->Size = ALIGN_PAGE( Size );
+	::InterlockedPushEntrySList( vaList, node );
+
+	*GuestVa = va;
 
 	return S_OK;
 }

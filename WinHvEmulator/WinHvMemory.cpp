@@ -89,9 +89,18 @@ HRESULT WhSeAllocateGuestVirtualMemory( WHSE_PARTITION* Partition, PVOID* HostVa
 	*HostVa = allocatedGuestVa;
 	*Size = size;
 
+	auto hresult = S_OK;
+
+	// No guest VA specified, let the system choose it
+	//
+	if ( GuestVa == 0) {
+		if ( FAILED( hresult = WhSiFindBestGVA( Partition, &GuestVa, size ) ) )
+			return hresult;
+	}
+
 	uintptr_t gpa { };
 	WHV_TRANSLATE_GVA_RESULT translateResult { };
-	auto hresult = WhSeTranslateVirtualAddress( Partition, GuestVa, &gpa, &translateResult );
+	hresult = WhSeTranslateVirtualAddress( Partition, GuestVa, &gpa, &translateResult );
 	if ( FAILED( hresult ) )
 		return hresult;
 
@@ -165,12 +174,12 @@ HRESULT WhSeInitializeMemoryLayout( WHSE_PARTITION* Partition ) {
 	if ( ::GetPhysicallyInstalledSystemMemory( &totalMemInKib ) == FALSE && totalMemInKib == 0 )
 		return WhSeGetLastHresult();
 
-	Partition->PhysicalMemoryLayout.LowestAddress = 0x00000000'00000000;
-	Partition->PhysicalMemoryLayout.HighestAddress = ( totalMemInKib << 10 ) - 1;
-	Partition->PhysicalMemoryLayout.SizeInBytes = totalMemInKib << 10;
+	Partition->MemoryLayout.LowestAddress = 0x00000000'00000000;
+	Partition->MemoryLayout.HighestAddress = ( totalMemInKib << 10 ) - 1;
+	Partition->MemoryLayout.SizeInBytes = totalMemInKib << 10;
 
 	uintptr_t pml4Address = 0;
-	Partition->PhysicalMemoryLayout.Pml4HostVa = nullptr;
+	Partition->MemoryLayout.Pml4HostVa = nullptr;
 
 	// Build paging tables
 	//
@@ -178,7 +187,7 @@ HRESULT WhSeInitializeMemoryLayout( WHSE_PARTITION* Partition ) {
 	if ( FAILED( hresult ) )
 		return hresult;
 
-	Partition->PhysicalMemoryLayout.Pml4PhysicalAddress = pml4Address;
+	Partition->MemoryLayout.Pml4PhysicalAddress = pml4Address;
 
 	auto registers = Partition->VirtualProcessor.Registers;
 	hresult = WhSeGetProcessorRegisters( Partition, registers );
