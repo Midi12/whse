@@ -1,4 +1,5 @@
 #include "Executor.hpp"
+#include "winbase.h"
 
 #include <windows.h>
 #include <winhvplatform.h>
@@ -225,6 +226,46 @@ DWORD WINAPI ExecuteThread( LPVOID lpParameter ) {
 	return static_cast< DWORD >( hresult );
 }
 
+DWORD Cleanup( WHSE_PARTITION** Partition ) {
+	// Release all the backing memory allocated on the host side
+	//
+	auto pfndb = ( *Partition )->PageFrameNumberNodes;
+	if ( pfndb != nullptr ) {
+		auto first = reinterpret_cast< WHSE_PFNDBNODE* >( ::RtlFirstEntrySList( Partition->PhysicalMemoryLayout.PageFrameNumberNodes ) );
+		if ( first == nullptr )
+			EXIT_WITH_MESSAGE( "No element in the PFN DB" );
+
+		auto current = first;
+		while ( current != nullptr ) {
+			::VirtualFree( current->HostVa, 0, MEM_RELEASE );
+
+			current = reinterpret_cast< WHSE_PFNDBNODE* >( current->Next );
+		}
+	}
+
+	// Release the backing memory from the PML4 directory
+	//
+	auto pml4Hva = ( *Partition )->Pml4HostVa;
+	if ( pml4Hva == nullptr )
+		EXIT_WITH_MESSAGE( "No PML4 HVA" );
+
+	::VirtualFree( pml4Hva, 0, MEM_RELEASE );
+
+	// Delete the processor
+	//
+	if ( FAILED( WhSeDeleteProcessor( *Partition ) ) )
+		EXIT_WITH_MESSAGE( "Failed to delete virtual processor" );
+
+	// Delete the partition
+	//
+	if ( FAILED( WhSeDeletePartition( Partition ) ) )
+		EXIT_WITH_MESSAGE( "Failed to delete hypervisor partition" );
+
+	printf( "Deleted hypervisor partition" );
+
+	return EXIT_SUCCESS;
+}
+
 // Execute a shellcode through a virtual processor
 //
 DWORD WINAPI Execute( const EXECUTOR_OPTIONS& options ) {
@@ -301,12 +342,7 @@ DWORD WINAPI Execute( const EXECUTOR_OPTIONS& options ) {
 
 	::CloseHandle( thread );
 
-	// Cleanup partition
+	// Cleanup
 	//
-	if ( FAILED( WhSeDeletePartition( partition ) ) )
-		EXIT_WITH_MESSAGE( "Failed to delete hypervisor partition" );
-
-	printf( "Deleted hypervisor partition" );
-
-	return EXIT_SUCCESS;
+	return Cleanup( &partition );
 }

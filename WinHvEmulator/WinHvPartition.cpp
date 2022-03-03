@@ -55,23 +55,32 @@ HRESULT WhSeCreatePartition( WHSE_PARTITION** pPartition ) {
 
 // Delete an hypervisor partition
 //
-HRESULT WhSeDeletePartition( WHSE_PARTITION* Partition ) {
+HRESULT WhSeDeletePartition( WHSE_PARTITION** Partition ) {
 	if ( Partition == nullptr )
+		return HRESULT_FROM_WIN32( ERROR_INVALID_PARAMETER );
+
+	if ( *Partition == nullptr )
 		return HRESULT_FROM_WIN32( ERROR_INVALID_PARAMETER );
 
 	// Set SUCCESS as default, in case we don't have any sub-object(s) to free
 	//
 	HRESULT hresult = 0;
 
+	auto partition = *Partition;
+
 	// Free the partition
-	if ( Partition->Handle ) {
-		hresult = ::WHvDeletePartition( Partition->Handle );
+	//
+	if ( partition->Handle ) {
+		hresult = ::WHvDeletePartition( partition->Handle );
 		if ( FAILED( hresult ) ) {
 			return hresult;
 		}
 
-		Partition->Handle = nullptr;
+		partition->Handle = nullptr;
 	}
+
+	::HeapFree( ::GetProcessHandle(), 0, partition );
+	*Partition = nullptr;
 
 	return hresult;
 }

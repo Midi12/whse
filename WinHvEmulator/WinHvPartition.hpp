@@ -13,6 +13,6 @@ HRESULT WHSEAPI WhSeCreatePartition( WHSE_PARTITION** pPartition );
 
 // Delete an hypervisor partition
 //
-HRESULT WHSEAPI WhSeDeletePartition( WHSE_PARTITION* Partition );
+HRESULT WHSEAPI WhSeDeletePartition( WHSE_PARTITION** Partition );
 
 #endif // !WINHVPARTITION_HPP
