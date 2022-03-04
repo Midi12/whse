@@ -79,7 +79,7 @@ HRESULT WhSeDeletePartition( WHSE_PARTITION** Partition ) {
 		partition->Handle = nullptr;
 	}
 
-	::HeapFree( ::GetProcessHandle(), 0, partition );
+	::HeapFree( ::GetProcessHeap(), 0, partition );
 	*Partition = nullptr;
 
 	return hresult;

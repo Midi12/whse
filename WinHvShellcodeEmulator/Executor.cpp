@@ -1,4 +1,6 @@
 #include "Executor.hpp"
+#include "Utils.hpp"
+
 #include "winbase.h"
 #include "winnt.h"
 
@@ -10,8 +12,8 @@
 #define EXIT_WITH_MESSAGE( x ) \
 	{ \
 		printf( x ); \
-		printf( "Last hresult = %llx", WhSeGetLastHresult() ); \
-		printf( "Last error code = %llx", WhSeGetLastError() ); \
+		printf( "Last hresult = %llx", static_cast< unsigned long long >( WhSeGetLastHresult() ) ); \
+		printf( "Last error code = %llx", static_cast< unsigned long long >( WhSeGetLastError() ) ); \
 		return EXIT_FAILURE; \
 	} \
 
@@ -318,10 +320,12 @@ DWORD WINAPI Execute( const EXECUTOR_OPTIONS& options ) {
 	switch ( options.Mode ) {
 		using enum PROCESSOR_MODE;
 		case UserMode:
-			lowestAddress = ;
-			highestAddress = ;
+			lowestAddress = 0x00000000'00000000;
+			highestAddress = 0x00008000'00000000 - 64KiB;
 			break;
 		case KernelMode:
+			lowestAddress = 0xffff8000'00000000;
+			highestAddress = 0xffffffff'ffffffff - 4MiB;
 			break;
 		default:
 			EXIT_WITH_MESSAGE( "Unsupported mode" );

@@ -1,7 +1,6 @@
 #ifndef WINHVDEFS_HPP
 #define WINHVDEFS_HPP
 
-#include "winnt.h"
 #include <windows.h>
 #include <winhvplatform.h>
 
