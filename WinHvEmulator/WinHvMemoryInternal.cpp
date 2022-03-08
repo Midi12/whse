@@ -92,14 +92,14 @@ HRESULT WhSpInsertPageTableEntry( WHSE_PARTITION* Partition, PMMPTE_HARDWARE Par
 
 	ParentLayer[ Index ] = pte;
 
-	WHSE_PFNDBNODE* node = reinterpret_cast< WHSE_PFNDBNODE* >( ::HeapAlloc( ::GetProcessHeap(), HEAP_ZERO_MEMORY, sizeof( decltype( *node ) ) ) );
+	WHSE_ALLOCATION_NODE* node = reinterpret_cast< WHSE_ALLOCATION_NODE* >( ::HeapAlloc( ::GetProcessHeap(), HEAP_ZERO_MEMORY, sizeof( decltype( *node ) ) ) );
 	if ( node == nullptr )
 		return HRESULT_FROM_WIN32( ERROR_OUTOFMEMORY );
 
-	node->PageFrameNumber = pte.PageFrameNumber;
-	node->HostVa = hva;
+	node->GuestPhysicalAddress = gpa;
+	node->HostVirtualAddress = hva;
 
-	::InterlockedPushEntrySList( Partition->MemoryLayout.PageFrameNumberNodes, node );
+	::InterlockedPushEntrySList( Partition->MemoryLayout.AllocationTracker, node );
 
 	return hresult;
 }
@@ -112,12 +112,14 @@ HRESULT WhSiSetupPaging( WHSE_PARTITION* Partition, uintptr_t* Pml4PhysicalAddre
 	if ( Partition->MemoryLayout.Pml4HostVa != nullptr )
 		return HRESULT_FROM_WIN32( ERROR_ALREADY_INITIALIZED );
 
-	PSLIST_HEADER pfnNodes = reinterpret_cast< PSLIST_HEADER >( ::HeapAlloc( ::GetProcessHeap(), HEAP_ZERO_MEMORY, sizeof( decltype( *pfnNodes ) ) ) );
-	if ( pfnNodes == nullptr )
+	// Initialize Guest Virtual Address Space allocations tracking
+	//
+	PSLIST_HEADER tracker = reinterpret_cast< PSLIST_HEADER >( ::HeapAlloc( ::GetProcessHeap(), HEAP_ZERO_MEMORY, sizeof( decltype( *tracker ) ) ) );
+	if ( tracker == nullptr )
 		return HRESULT_FROM_WIN32( ERROR_OUTOFMEMORY );
 
-	::InitializeSListHead( pfnNodes );
-	Partition->MemoryLayout.PageFrameNumberNodes = pfnNodes;
+	::InitializeSListHead( tracker );
+	Partition->MemoryLayout.AllocationTracker = tracker;
 	
 	// Allocate PML4 on physical memory
 	//
@@ -142,32 +144,23 @@ HRESULT WhSiSetupPaging( WHSE_PARTITION* Partition, uintptr_t* Pml4PhysicalAddre
 	}
 
 	*Pml4PhysicalAddress = pml4Gpa;
-
-	// Initialize Guest Virtual Address Space allocations tracking
-	//
-	PSLIST_HEADER vaList = reinterpret_cast< PSLIST_HEADER >( ::HeapAlloc( ::GetProcessHeap(), HEAP_ZERO_MEMORY, sizeof( decltype( *vaList ) ) ) );
-	if ( vaList == nullptr )
-		return HRESULT_FROM_WIN32( ERROR_OUTOFMEMORY );
-
-	::InitializeSListHead( vaList );
-	Partition->MemoryLayout.AllocatedVirtualSpaceNodes = vaList;
 	
 	return hresult;
 }
 
 HRESULT WhSpLookupHVAFromPFN( WHSE_PARTITION* Partition, uintptr_t PageFrameNumber, PVOID* HostVa ) {
-	auto first = reinterpret_cast< WHSE_PFNDBNODE* >( ::RtlFirstEntrySList( Partition->MemoryLayout.PageFrameNumberNodes ) );
+	auto first = reinterpret_cast< WHSE_ALLOCATION_NODE* >( ::RtlFirstEntrySList( Partition->MemoryLayout.AllocationTracker ) );
 	if ( first == nullptr )
 		return HRESULT_FROM_WIN32( ERROR_NO_MORE_ITEMS );
 
 	auto current = first;
 	while ( current != nullptr ) {
-		if ( current->PageFrameNumber == PageFrameNumber ) {
-			*HostVa = current->HostVa;
+		if ( current->GuestPhysicalAddress == ( PageFrameNumber * PAGE_SIZE ) ) {
+			*HostVa = current->HostVirtualAddress;
 			break;
 		}
 
-		current = reinterpret_cast< WHSE_PFNDBNODE* >( current->Next );
+		current = reinterpret_cast< WHSE_ALLOCATION_NODE* >( current->Next );
 	}
 
 	return S_OK;
@@ -282,28 +275,33 @@ HRESULT WhSiFindBestGVA( WHSE_PARTITION* Partition, uintptr_t* GuestVa, size_t S
 	if ( GuestVa == nullptr )
 		return HRESULT_FROM_WIN32( ERROR_INVALID_PARAMETER );
 
-	auto vaList = Partition->MemoryLayout.AllocatedVirtualSpaceNodes;
-	if ( vaList == nullptr )
+	auto tracker = Partition->MemoryLayout.AllocationTracker;
+	if ( tracker == nullptr )
 		return HRESULT_FROM_WIN32( PEERDIST_ERROR_NOT_INITIALIZED );
 
-	auto first = reinterpret_cast< WHSE_VANODE* >( ::RtlFirstEntrySList( vaList ) );
+	auto first = reinterpret_cast< WHSE_ALLOCATION_NODE* >( ::RtlFirstEntrySList( tracker ) );
 	if ( first == nullptr )
 		return HRESULT_FROM_WIN32( ERROR_NO_MORE_ITEMS );
 
+	uintptr_t highestExistingGva = 0;
 	auto current = first;
 	while ( current != nullptr ) {
-		current = reinterpret_cast< WHSE_VANODE* >( current->Next );
+		uintptr_t currentGva = reinterpret_cast< uintptr_t >( current->GuestVirtualAddress );
+		if ( currentGva > highestExistingGva )
+			highestExistingGva = currentGva;
+		
+		current = reinterpret_cast< WHSE_ALLOCATION_NODE* >( current->Next );
 	}
 
-	auto va = ALIGN_PAGE( reinterpret_cast< uintptr_t >( current->VirtualAddress ) + current->Size );
+	auto va = ALIGN_PAGE( reinterpret_cast< uintptr_t >( current->GuestVirtualAddress ) + current->Size );
 
-	WHSE_VANODE* node = reinterpret_cast< WHSE_VANODE* >( ::HeapAlloc( ::GetProcessHeap(), HEAP_ZERO_MEMORY, sizeof( decltype( *node ) ) ) );
-	if ( node == nullptr )
-		return HRESULT_FROM_WIN32( ERROR_OUTOFMEMORY );
+	// WHSE_ALLOCATION_NODE* node = reinterpret_cast< WHSE_ALLOCATION_NODE* >( ::HeapAlloc( ::GetProcessHeap(), HEAP_ZERO_MEMORY, sizeof( decltype( *node ) ) ) );
+	// if ( node == nullptr )
+	// 	return HRESULT_FROM_WIN32( ERROR_OUTOFMEMORY );
 
-	node->VirtualAddress = reinterpret_cast< PVOID >( va );
-	node->Size = ALIGN_PAGE( Size );
-	::InterlockedPushEntrySList( vaList, node );
+	// node->GuestVirtualAddress = reinterpret_cast< PVOID >( va );
+	// node->Size = ALIGN_PAGE( Size );
+	// ::InterlockedPushEntrySList( tracker, node );
 
 	*GuestVa = va;
 

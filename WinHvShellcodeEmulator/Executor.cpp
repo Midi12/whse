@@ -266,35 +266,19 @@ DWORD WINAPI ExecuteThread( LPVOID lpParameter ) {
 }
 
 DWORD Cleanup( WHSE_PARTITION** Partition ) {
-	// Release all Guest VAs backing host memory
+	// Release all allocation on backing host memory
 	//
-	auto vaList = ( *Partition )->MemoryLayout.AllocatedVirtualSpaceNodes;
-	if ( vaList != nullptr ) {
-		auto first = reinterpret_cast< WHSE_VANODE* >( ::RtlFirstEntrySList( vaList ) );
+	auto tracker = ( *Partition )->MemoryLayout.AllocationTracker;
+	if ( tracker != nullptr ) {
+		auto first = reinterpret_cast< WHSE_ALLOCATION_NODE* >( ::RtlFirstEntrySList( tracker ) );
 		if ( first == nullptr )
 			EXIT_WITH_MESSAGE( "No element in the VA Node DB" );
 
 		auto current = first;
 		while ( current != nullptr ) {
-			::VirtualFree( current->VirtualAddress, 0, MEM_RELEASE );
+			::VirtualFree( current->HostVirtualAddress, 0, MEM_RELEASE );
 
-			current = reinterpret_cast< WHSE_VANODE* >( current->Next );
-		}
-	}
-
-	// Release all the backing memory allocated on the host side
-	//
-	auto pfnDb = ( *Partition )->MemoryLayout.PageFrameNumberNodes;
-	if ( pfnDb != nullptr ) {
-		auto first = reinterpret_cast< WHSE_PFNDBNODE* >( ::RtlFirstEntrySList( pfnDb ) );
-		if ( first == nullptr )
-			EXIT_WITH_MESSAGE( "No element in the PFN DB" );
-
-		auto current = first;
-		while ( current != nullptr ) {
-			::VirtualFree( current->HostVa, 0, MEM_RELEASE );
-
-			current = reinterpret_cast< WHSE_PFNDBNODE* >( current->Next );
+			current = reinterpret_cast< WHSE_ALLOCATION_NODE* >( current->Next );
 		}
 	}
 

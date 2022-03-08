@@ -32,7 +32,7 @@ enum WHSE_REGISTER : uint8_t {
     Rflags,
     Gs,     Fs,     Es,
     Ds,     Cs,     Ss,
-    Gdtr,   Idtr,
+    Gdtr,   Ldtr,   Idtr,
     Cr0,    Cr2,    Cr3,    Cr4,
     Efer,
 
@@ -65,6 +65,7 @@ static constexpr WHSE_REGISTER_NAME g_registers[] = {
     WHvX64RegisterCs,
     WHvX64RegisterSs,
     WHvX64RegisterGdtr,
+    WHvX64RegisterLdtr,
     WHvX64RegisterIdtr,
     WHvX64RegisterCr0,
     WHvX64RegisterCr2,
@@ -85,14 +86,11 @@ typedef struct WHSE_VIRTUAL_PROCESSOR {
     WHSE_REGISTERS Registers;
 };
 
-typedef struct WHSE_VANODE : SLIST_ENTRY {
-    PVOID VirtualAddress;
+typedef struct WHSE_ALLOCATION_NODE : SLIST_ENTRY {
+    PVOID GuestVirtualAddress;
+    uintptr_t GuestPhysicalAddress;
+    PVOID HostVirtualAddress;
     size_t Size;
-};
-
-typedef struct WHSE_PFNDBNODE : SLIST_ENTRY {
-    uintptr_t PageFrameNumber;
-    PVOID HostVa;
 };
 
 typedef struct WHSE_ADDRESS_SPACE_BOUNDARY {
@@ -105,8 +103,7 @@ typedef struct WHSE_MEMORY_LAYOUT_DESC {
     WHSE_ADDRESS_SPACE_BOUNDARY PhysicalAddressSpace;
     uintptr_t Pml4PhysicalAddress;
     PVOID Pml4HostVa;
-    PSLIST_HEADER PageFrameNumberNodes;
-    PSLIST_HEADER AllocatedVirtualSpaceNodes;
+    PSLIST_HEADER AllocationTracker;
     WHSE_ADDRESS_SPACE_BOUNDARY VirtualAddressSpace;
 };
 
