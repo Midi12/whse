@@ -100,7 +100,7 @@ HRESULT WhSeAllocateGuestVirtualMemory( WHSE_PARTITION* Partition, PVOID* HostVa
 
 	uintptr_t gpa { };
 	WHV_TRANSLATE_GVA_RESULT translateResult { };
-	hresult = WhSeTranslateGvaToGpa( Partition, GuestVa, &gpa, &translateResult, size );
+	hresult = WhSeTranslateGvaToGpa( Partition, GuestVa, &gpa, &translateResult );
 	if ( FAILED( hresult ) )
 		return hresult;
 
@@ -120,7 +120,7 @@ HRESULT WHSEAPI WhSeMapHostToGuestVirtualMemory( WHSE_PARTITION* Partition, PVOI
 
 	uintptr_t gpa { };
 	WHV_TRANSLATE_GVA_RESULT translateResult { };
-	auto hresult = WhSeTranslateGvaToGpa( Partition, GuestVa, &gpa, &translateResult, Size );
+	auto hresult = WhSeTranslateGvaToGpa( Partition, GuestVa, &gpa, &translateResult );
 	if ( FAILED( hresult ) )
 		return hresult;
 
@@ -215,7 +215,7 @@ HRESULT WhSeInitializeMemoryLayout( WHSE_PARTITION* Partition ) {
 
 // Translate guest virtual address to guest physical address
 //
-HRESULT WhSeTranslateGvaToGpa( WHSE_PARTITION* Partition, uintptr_t VirtualAddress, uintptr_t* PhysicalAddress, WHV_TRANSLATE_GVA_RESULT* TranslationResult, size_t Size ) {
+HRESULT WhSeTranslateGvaToGpa( WHSE_PARTITION* Partition, uintptr_t VirtualAddress, uintptr_t* PhysicalAddress, WHV_TRANSLATE_GVA_RESULT* TranslationResult ) {
 	if ( PhysicalAddress == nullptr )
 		return HRESULT_FROM_WIN32( ERROR_INVALID_PARAMETER );
 	
@@ -242,7 +242,7 @@ HRESULT WhSeTranslateGvaToGpa( WHSE_PARTITION* Partition, uintptr_t VirtualAddre
 		switch ( translationResult.ResultCode )
 		{
 			case WHvTranslateGvaResultPageNotPresent:
-				hresult = WhSiInsertPageTableEntry( Partition, VirtualAddress, Size );
+				hresult = WhSiInsertPageTableEntry( Partition, VirtualAddress );
 				break;
 			case WHvTranslateGvaResultPrivilegeViolation:
 			case WHvTranslateGvaResultInvalidPageTableFlags:
