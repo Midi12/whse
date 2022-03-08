@@ -9,11 +9,14 @@
 
 #include <stdio.h>
 
+
+#include <vector>
+
 #define EXIT_WITH_MESSAGE( x ) \
 	{ \
-		printf( x ); \
-		printf( "Last hresult = %llx", static_cast< unsigned long long >( WhSeGetLastHresult() ) ); \
-		printf( "Last error code = %llx", static_cast< unsigned long long >( WhSeGetLastError() ) ); \
+		printf( x "\n" ); \
+		printf( "Last hresult = %llx\n", static_cast< unsigned long long >( WhSeGetLastHresult() ) ); \
+		printf( "Last error code = %llx\n", static_cast< unsigned long long >( WhSeGetLastError() ) ); \
 		return EXIT_FAILURE; \
 	} \
 
@@ -129,13 +132,43 @@ HRESULT HandleExitReason( WHSE_PARTITION* Partition, WHSE_VP_EXIT_REASON ExitRea
 	//
 	switch ( ExitReason )
 	{
-	case WHvRunVpExitReasonUnrecoverableException:
-		break;
-	case WHvRunVpExitReasonNone:
-		hresult = S_OK;
-		break;
-	default:
-		break;
+		case WHvRunVpExitReasonNone:
+		case WHvRunVpExitReasonCanceled:
+			hresult = S_OK;
+			break;
+		case WHvRunVpExitReasonMemoryAccess:
+			break;
+		case WHvRunVpExitReasonX64IoPortAccess:
+			break;
+		case WHvRunVpExitReasonUnrecoverableException:
+		{
+			auto ctx = Partition->VirtualProcessor.ExitContext;
+			auto rip = Partition->VirtualProcessor.Registers[ Rip ].Reg64;
+			auto rsp = Partition->VirtualProcessor.Registers[ Rsp ].Reg64;
+			auto cs = Partition->VirtualProcessor.Registers[ Cs ].Segment;
+			auto ss = Partition->VirtualProcessor.Registers[ Ss ].Segment;
+
+			auto a = 1;
+		}
+			break;
+		case WHvRunVpExitReasonInvalidVpRegisterValue:
+			break;
+		case WHvRunVpExitReasonUnsupportedFeature:
+			break;
+		case WHvRunVpExitReasonX64InterruptWindow:
+			break;
+		case WHvRunVpExitReasonX64Halt:
+			break;
+		case WHvRunVpExitReasonX64MsrAccess:
+			break;
+		case WHvRunVpExitReasonX64Cpuid:
+			break;
+		case WHvRunVpExitReasonException:
+			break;
+		case WHvRunVpExitReasonX64Rdtsc:
+			break;
+		default:
+			break;
 	}
 	
 	return hresult;
@@ -198,6 +231,9 @@ DWORD WINAPI ExecuteThread( LPVOID lpParameter ) {
 
 	registers[ Ss ].Segment.Selector = ( dataSelector | ring );
 	registers[ Ss ].Segment.DescriptorPrivilegeLevel = ring;
+	registers[ Ss ].Segment.Default = 1;
+	registers[ Ss ].Segment.Granularity = 1;
+
 	registers[ Ds ] = registers[ Ss ];
 	registers[ Es ] = registers[ Ss ];
 	registers[ Gs ] = registers[ Ss ];
@@ -280,7 +316,7 @@ DWORD Cleanup( WHSE_PARTITION** Partition ) {
 	if ( FAILED( WhSeDeletePartition( Partition ) ) )
 		EXIT_WITH_MESSAGE( "Failed to delete hypervisor partition" );
 
-	printf( "Deleted hypervisor partition" );
+	printf( "Deleted hypervisor partition\n" );
 
 	return EXIT_SUCCESS;
 }
@@ -294,23 +330,23 @@ DWORD WINAPI Execute( const EXECUTOR_OPTIONS& options ) {
 	if ( FAILED( WhSeCreatePartition( &partition ) ) )
 		EXIT_WITH_MESSAGE( "Failed to create hypervisor partition" );
 
-	printf( "Hypervisor partition created " );
-	printf( "Partition = %p", reinterpret_cast< void* >( partition ) );
-	printf( "Partition->Handle = %p", reinterpret_cast< void* >( partition->Handle ) );
+	printf( "Hypervisor partition created\n" );
+	printf( "Partition = %p\n", reinterpret_cast< void* >( partition ) );
+	printf( "Partition->Handle = %p\n", reinterpret_cast< void* >( partition->Handle ) );
 
 	// Create the processor
 	// 
 	if ( FAILED( WhSeCreateProcessor( partition ) ) )
 		EXIT_WITH_MESSAGE( "Failed to create the processor" );
 
-	printf( "Created processor %d", partition->VirtualProcessor.Index );
+	printf( "Created processor %d\n", partition->VirtualProcessor.Index );
 
 	// Initialize paging
 	//
 	if ( FAILED( WhSeInitializeMemoryLayout( partition ) ) )
 		EXIT_WITH_MESSAGE( "Failed to initialize memory layout" );
 
-	printf( "Initialized paging (CR3 = %llx)", static_cast< unsigned long long >( partition->MemoryLayout.Pml4PhysicalAddress ) );
+	printf( "Initialized paging (CR3 = %llx)\n", static_cast< unsigned long long >( partition->MemoryLayout.Pml4PhysicalAddress ) );
 
 	uintptr_t lowestAddress = 0;
 	uintptr_t highestAddress = 0;
@@ -343,7 +379,7 @@ DWORD WINAPI Execute( const EXECUTOR_OPTIONS& options ) {
 	if ( FAILED( WhSeAllocateGuestVirtualMemory( partition, &stackHva, stackGva, &stackSize, WHvMapGpaRangeFlagRead | WHvMapGpaRangeFlagWrite ) ) )
 		EXIT_WITH_MESSAGE( "Failed to allocate stack" );
 
-	printf( "Allocated stack space %llx (size = %llx)", static_cast< unsigned long long >( stackGva ), static_cast< unsigned long long >( stackSize ) );
+	printf( "Allocated stack space %llx (size = %llx)\n", static_cast< unsigned long long >( stackGva ), static_cast< unsigned long long >( stackSize ) );
 
 	// Allocate code
 	//
@@ -357,18 +393,18 @@ DWORD WINAPI Execute( const EXECUTOR_OPTIONS& options ) {
 	if( FAILED( WhSeMapHostToGuestVirtualMemory( partition, shellcode, codeGva, ALIGN_PAGE( options.CodeSize ), WHvMapGpaRangeFlagRead | WHvMapGpaRangeFlagWrite | WHvMapGpaRangeFlagExecute ) ) )
 		EXIT_WITH_MESSAGE( "Failed to map shellcode" );
 
-	printf( "Allocated code memory %llx (size = %llx, allocated = %llx)", static_cast< unsigned long long >( codeGva ), static_cast< unsigned long long >( options.CodeSize ), static_cast< unsigned long long >( ALIGN_PAGE( options.CodeSize ) ) );
+	printf( "Allocated code memory %llx (size = %llx, allocated = %llx)\n", static_cast< unsigned long long >( codeGva ), static_cast< unsigned long long >( options.CodeSize ), static_cast< unsigned long long >( ALIGN_PAGE( options.CodeSize ) ) );
 
 	// Run the processor
 	//
 	EXECUTOR_PARAMS params {
 		.Entrypoint = codeGva,
-		.Stack = stackGva,
+		.Stack = stackGva + stackSize - PAGE_SIZE, // set rsp to the end of the allocated stack range as stack "grows downward" (let 1 page on top for "safety")
 		.Partition = partition,
 		.Mode = options.Mode
 	};
 
-	printf( "Starting the processor ..." );
+	printf( "Starting the processor ...\n" );
 
 	auto thread = ::CreateThread( nullptr, 0, ExecuteThread, &params, 0, nullptr );
 	if ( thread == nullptr )
@@ -377,10 +413,15 @@ DWORD WINAPI Execute( const EXECUTOR_OPTIONS& options ) {
 	// Wait until execution finishes or an unhandled vcpu exit
 	//
 	::WaitForSingleObject( thread, INFINITE );
-	
+
+	// debug code
+	std::vector<uint8_t> codeBytes( reinterpret_cast< uint8_t* >( shellcode ), reinterpret_cast< uint8_t* >( reinterpret_cast< uintptr_t >( shellcode ) + options.CodeSize ) );
+	std::vector<uint8_t> stackBytes( reinterpret_cast< uint8_t* >( stackHva ), reinterpret_cast< uint8_t* >( reinterpret_cast< uintptr_t >( stackHva ) + stackSize ) );
+	// debug code
+
 	uint32_t exitCode;
 	::GetExitCodeThread( thread, reinterpret_cast< LPDWORD >( &exitCode ) );
-	printf( "Run thread exited with reason %d", exitCode );
+	printf( "Run thread exited with reason %d\n", exitCode );
 
 	::CloseHandle( thread );
 

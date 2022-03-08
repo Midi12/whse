@@ -34,9 +34,9 @@ HRESULT WHSEAPI WhSeFreeGuestMemory( WHSE_PARTITION* Partition, PVOID HostVa, ui
 //
 HRESULT WHSEAPI WhSeInitializeMemoryLayout( WHSE_PARTITION* Partition );
 
-// Translate virtual address to physical address
+// Translate guest virtual address to guest physical address
 //
-HRESULT WHSEAPI WhSeTranslateVirtualAddress( WHSE_PARTITION* Partition, uintptr_t VirtualAddress, uintptr_t* PhysicalAddress, WHV_TRANSLATE_GVA_RESULT* TranslationResult );
+HRESULT WHSEAPI WhSeTranslateGvaToGpa( WHSE_PARTITION* Partition, uintptr_t VirtualAddress, uintptr_t* PhysicalAddress, WHV_TRANSLATE_GVA_RESULT* TranslationResult, size_t Size );
 
 // Page fault handler
 //

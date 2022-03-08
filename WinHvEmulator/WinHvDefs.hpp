@@ -34,7 +34,9 @@ enum WHSE_REGISTER : uint8_t {
     Ds,     Cs,     Ss,
     Gdtr,   Idtr,
     Cr0,    Cr2,    Cr3,    Cr4,
-    Efer
+    Efer,
+
+    NumberOfRegisters
 };
 
 static constexpr WHSE_REGISTER_NAME g_registers[] = {
@@ -70,6 +72,8 @@ static constexpr WHSE_REGISTER_NAME g_registers[] = {
     WHvX64RegisterCr4,
     WHvX64RegisterEfer
 };
+
+static_assert( RTL_NUMBER_OF( g_registers ) == WHSE_REGISTER::NumberOfRegisters, "number of registers in g_registers != WHSE_REGISTER::NumberOfRegisters" );
 
 static constexpr uint32_t g_registers_count = RTL_NUMBER_OF( g_registers );
 

@@ -46,7 +46,7 @@ HRESULT WhSiGetNextPhysicalPages( WHSE_PARTITION* Partition, size_t NumberOfPage
 
 // Get one physical page
 //
-HRESULT WhSiAGetNextPhysicalPage( WHSE_PARTITION* Partition, uintptr_t* PhysicalPageAddress ) {
+HRESULT WhSiGetNextPhysicalPage( WHSE_PARTITION* Partition, uintptr_t* PhysicalPageAddress ) {
 	return WhSiGetNextPhysicalPages( Partition, 1, PhysicalPageAddress );
 }
 
@@ -54,7 +54,7 @@ HRESULT WhSiAGetNextPhysicalPage( WHSE_PARTITION* Partition, uintptr_t* Physical
 //
 HRESULT WhSiAllocateGuestPhysicalMemory( WHSE_PARTITION* Partition, PVOID* HostVa, uintptr_t* GuestPa, size_t* Size, WHSE_MEMORY_ACCESS_FLAGS Flags ) {
 	uintptr_t physicalAddress = 0;
-	auto hresult = WhSiAGetNextPhysicalPage( Partition, &physicalAddress );
+	auto hresult = WhSiGetNextPhysicalPages( Partition, *Size / PAGE_SIZE, &physicalAddress );
 	if ( FAILED( hresult ) )
 		return hresult;
 
@@ -71,10 +71,10 @@ HRESULT WhSiAllocateGuestPhysicalMemory( WHSE_PARTITION* Partition, PVOID* HostV
 	return S_OK;
 }
 
-HRESULT WhSpInsertPageTableEntry( WHSE_PARTITION* Partition, PMMPTE_HARDWARE ParentLayer, uint16_t Index) {
+HRESULT WhSpInsertPageTableEntry( WHSE_PARTITION* Partition, PMMPTE_HARDWARE ParentLayer, uint16_t Index, size_t Size) {
 	uintptr_t gpa = 0;
 	PVOID hva = nullptr;
-	size_t size = PAGE_SIZE;
+	size_t size = Size > PAGE_SIZE ? Size : PAGE_SIZE;
 
 	auto hresult = WhSiAllocateGuestPhysicalMemory( Partition, &hva, &gpa, &size, WHvMapGpaRangeFlagRead | WHvMapGpaRangeFlagWrite );
 	if ( FAILED( hresult ) )
@@ -136,7 +136,7 @@ HRESULT WhSiSetupPaging( WHSE_PARTITION* Partition, uintptr_t* Pml4PhysicalAddre
 		// Allocate a Page Directory Pointers page
 		// The memory is zeroed so every PDP entries will have the Valid (Present) bit set to 0
 		//
-		hresult = WhSpInsertPageTableEntry( Partition, pml4, i );
+		hresult = WhSpInsertPageTableEntry( Partition, pml4, i, size );
 		if ( FAILED( hresult ) )
 			return hresult;
 	}
@@ -176,7 +176,7 @@ HRESULT WhSpLookupHVAFromPFN( WHSE_PARTITION* Partition, uintptr_t PageFrameNumb
 // Internal function to insert page table in the paging directory
 // Allocate PML4 entry, PDP entry, PD entry and PT entry
 //
-HRESULT WhSiInsertPageTableEntry( WHSE_PARTITION* Partition, uintptr_t VirtualAddress ) {
+HRESULT WhSiInsertPageTableEntry( WHSE_PARTITION* Partition, uintptr_t VirtualAddress, size_t Size ) {
 	// "Explode" the VA into translation indexes
 	//
 	uint16_t pml4Idx;
@@ -213,7 +213,8 @@ HRESULT WhSiInsertPageTableEntry( WHSE_PARTITION* Partition, uintptr_t VirtualAd
 		hresult = WhSpInsertPageTableEntry(
 			Partition,
 			pdp,
-			pdpIdx
+			pdpIdx,
+			PAGE_SIZE
 		);
 
 		if ( FAILED( hresult ) )
@@ -237,7 +238,8 @@ HRESULT WhSiInsertPageTableEntry( WHSE_PARTITION* Partition, uintptr_t VirtualAd
 		hresult = WhSpInsertPageTableEntry(
 			Partition,
 			pd,
-			pdIdx
+			pdIdx,
+			PAGE_SIZE
 		);
 
 		if ( FAILED( hresult ) )
@@ -261,7 +263,8 @@ HRESULT WhSiInsertPageTableEntry( WHSE_PARTITION* Partition, uintptr_t VirtualAd
 		hresult = WhSpInsertPageTableEntry(
 			Partition,
 			pt,
-			ptIdx
+			ptIdx,
+			Size
 		);
 
 		if ( FAILED( hresult ) )

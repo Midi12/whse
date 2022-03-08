@@ -39,16 +39,16 @@ HRESULT WhSeAllocateGuestPhysicalMemory( WHSE_PARTITION* Partition, PVOID* HostV
 	// Allocate memory into host
 	//
 	auto protectionFlags = AccessFlagsToProtectionFlags( Flags );
-	auto allocatedGuestVa = ::VirtualAlloc( nullptr, size, MEM_COMMIT | MEM_RESERVE, protectionFlags );
-	if ( allocatedGuestVa == nullptr )
+	auto allocatedHostVa = ::VirtualAlloc( nullptr, size, MEM_COMMIT | MEM_RESERVE, protectionFlags );
+	if ( allocatedHostVa == nullptr )
 		return WhSeGetLastHresult();
 
-	*HostVa = allocatedGuestVa;
+	*HostVa = allocatedHostVa;
 	*Size = size;
 
 	// Create the allocated range into the guest physical address space
 	//
-	return ::WHvMapGpaRange( Partition->Handle, allocatedGuestVa, static_cast< WHV_GUEST_PHYSICAL_ADDRESS >( GuestPa ), size, Flags );
+	return ::WHvMapGpaRange( Partition->Handle, allocatedHostVa, static_cast< WHV_GUEST_PHYSICAL_ADDRESS >( GuestPa ), size, Flags );
 }
 
 // Map memory from host to guest physical address space (backed by host memory)
@@ -82,11 +82,11 @@ HRESULT WhSeAllocateGuestVirtualMemory( WHSE_PARTITION* Partition, PVOID* HostVa
 	// Allocate memory into host
 	//
 	auto protectionFlags = AccessFlagsToProtectionFlags( Flags );
-	auto allocatedGuestVa = ::VirtualAlloc( nullptr, size, MEM_COMMIT | MEM_RESERVE, protectionFlags );
-	if ( allocatedGuestVa == nullptr )
+	auto allocatedHostVa = ::VirtualAlloc( nullptr, size, MEM_COMMIT | MEM_RESERVE, protectionFlags );
+	if ( allocatedHostVa == nullptr )
 		return WhSeGetLastHresult();
 
-	*HostVa = allocatedGuestVa;
+	*HostVa = allocatedHostVa;
 	*Size = size;
 
 	auto hresult = S_OK;
@@ -100,13 +100,13 @@ HRESULT WhSeAllocateGuestVirtualMemory( WHSE_PARTITION* Partition, PVOID* HostVa
 
 	uintptr_t gpa { };
 	WHV_TRANSLATE_GVA_RESULT translateResult { };
-	hresult = WhSeTranslateVirtualAddress( Partition, GuestVa, &gpa, &translateResult );
+	hresult = WhSeTranslateGvaToGpa( Partition, GuestVa, &gpa, &translateResult, size );
 	if ( FAILED( hresult ) )
 		return hresult;
 
 	// Create the allocated range into the guest address space
 	//
-	return ::WHvMapGpaRange( Partition->Handle, allocatedGuestVa, static_cast< WHV_GUEST_PHYSICAL_ADDRESS >( gpa ), size, Flags );
+	return ::WHvMapGpaRange( Partition->Handle, allocatedHostVa, static_cast< WHV_GUEST_PHYSICAL_ADDRESS >( gpa ), size, Flags );
 }
 
 // Map memory from host to guest virtual address space (backed by host memory)
@@ -120,7 +120,7 @@ HRESULT WHSEAPI WhSeMapHostToGuestVirtualMemory( WHSE_PARTITION* Partition, PVOI
 
 	uintptr_t gpa { };
 	WHV_TRANSLATE_GVA_RESULT translateResult { };
-	auto hresult = WhSeTranslateVirtualAddress( Partition, GuestVa, &gpa, &translateResult );
+	auto hresult = WhSeTranslateGvaToGpa( Partition, GuestVa, &gpa, &translateResult, Size );
 	if ( FAILED( hresult ) )
 		return hresult;
 
@@ -213,9 +213,9 @@ HRESULT WhSeInitializeMemoryLayout( WHSE_PARTITION* Partition ) {
 	return WhSeSetProcessorRegisters( Partition, registers );
 }
 
-// Translate virtual address to physical address
+// Translate guest virtual address to guest physical address
 //
-HRESULT WhSeTranslateVirtualAddress( WHSE_PARTITION* Partition, uintptr_t VirtualAddress, uintptr_t* PhysicalAddress, WHV_TRANSLATE_GVA_RESULT* TranslationResult ) {
+HRESULT WhSeTranslateGvaToGpa( WHSE_PARTITION* Partition, uintptr_t VirtualAddress, uintptr_t* PhysicalAddress, WHV_TRANSLATE_GVA_RESULT* TranslationResult, size_t Size ) {
 	if ( PhysicalAddress == nullptr )
 		return HRESULT_FROM_WIN32( ERROR_INVALID_PARAMETER );
 	
@@ -242,7 +242,7 @@ HRESULT WhSeTranslateVirtualAddress( WHSE_PARTITION* Partition, uintptr_t Virtua
 		switch ( translationResult.ResultCode )
 		{
 			case WHvTranslateGvaResultPageNotPresent:
-				hresult = WhSiInsertPageTableEntry( Partition, VirtualAddress );
+				hresult = WhSiInsertPageTableEntry( Partition, VirtualAddress, Size );
 				break;
 			case WHvTranslateGvaResultPrivilegeViolation:
 			case WHvTranslateGvaResultInvalidPageTableFlags:

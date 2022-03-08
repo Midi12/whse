@@ -43,7 +43,6 @@ HRESULT WhSeGetProcessorRegisters( WHSE_PARTITION* Partition, WHSE_REGISTERS Reg
 	if ( Registers == nullptr )
 		return HRESULT_FROM_WIN32( ERROR_INVALID_PARAMETER );
 
-	
 	auto vp = &Partition->VirtualProcessor;
 
 	auto hresult = ::WHvGetVirtualProcessorRegisters( Partition->Handle, vp->Index, g_registers, g_registers_count, vp->Registers );

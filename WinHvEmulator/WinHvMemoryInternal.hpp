@@ -44,7 +44,7 @@ HRESULT WhSiGetNextPhysicalPages( WHSE_PARTITION* Partition, size_t NumberOfPage
 
 // Get one physical page
 //
-HRESULT WhSiAGetNextPhysicalPage( WHSE_PARTITION* Partition, uintptr_t* PhysicalPageAddress );
+HRESULT WhSiGetNextPhysicalPage( WHSE_PARTITION* Partition, uintptr_t* PhysicalPageAddress );
 
 // Internal helper to allocate host memory to guest physical memory
 //
@@ -57,7 +57,7 @@ HRESULT WhSiSetupPaging( WHSE_PARTITION* Partition, uintptr_t* Pml4PhysicalAddre
 // Internal function to insert page table in the paging directory
 // Allocate PML4 entry, PDP entry, PD entry and PT entry
 //
-HRESULT WhSiInsertPageTableEntry( WHSE_PARTITION* Partition, uintptr_t VirtualAddress );
+HRESULT WhSiInsertPageTableEntry( WHSE_PARTITION* Partition, uintptr_t VirtualAddress, size_t Size );
 
 // Find a suitable Guest VA
 //
@@ -66,6 +66,6 @@ HRESULT WhSiFindBestGVA( WHSE_PARTITION* Partition, uintptr_t* GuestVa, size_t S
 // Private api
 //
 HRESULT WhSpLookupHVAFromPFN( WHSE_PARTITION* Partition, uintptr_t PageFrameNumber, PVOID* HostVa );
-HRESULT WhSpInsertPageTableEntry( WHSE_PARTITION* Partition, PMMPTE_HARDWARE ParentLayer, uint16_t Index );
+HRESULT WhSpInsertPageTableEntry( WHSE_PARTITION* Partition, PMMPTE_HARDWARE ParentLayer, uint16_t Index, size_t Size );
 
 #endif // !WINHVMEMORYINTERNAL_HPP

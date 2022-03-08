@@ -13,16 +13,16 @@
 
 #define EXIT_WITH_MESSAGE( x ) \
 	{ \
-		printf( x ); \
-		printf( "Last hresult = %llx", static_cast< unsigned long long >( WhSeGetLastHresult() ) ); \
-		printf( "Last error code = %llx", static_cast< unsigned long long >( WhSeGetLastError() ) ); \
+		printf( x "\n" ); \
+		printf( "Last hresult = %llx\n", static_cast< unsigned long long >( WhSeGetLastHresult() ) ); \
+		printf( "Last error code = %llx\n", static_cast< unsigned long long >( WhSeGetLastError() ) ); \
 		return EXIT_FAILURE; \
 	} \
 
 void Usage() {
-	printf( "-i <filename> binary file containing the shellcode to execute" );
-	printf( "-m <kernel | user> kernel or user mode code" );
-	printf( "-b <base> load the shellcode at a specified virtual address" );
+	printf( "-i <filename> binary file containing the shellcode to execute\n" );
+	printf( "-m <kernel | user> kernel or user mode code\n" );
+	printf( "-b <base> load the shellcode at a specified virtual address\n" );
 }
 
 // Read input file
@@ -140,7 +140,7 @@ int main( int argc, char* const argv[], char* const envp[] ) {
 		EXIT_WITH_MESSAGE( "No shellcode data" );
 
 	if ( options.Mode == PROCESSOR_MODE::None ) {
-		printf( "No processor mode specified, defaulting to 'UserMode'" );
+		printf( "No processor mode specified, defaulting to 'UserMode'\n" );
 		options.Mode = PROCESSOR_MODE::UserMode;
 	}
 
