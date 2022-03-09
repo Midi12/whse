@@ -101,6 +101,13 @@ HRESULT WhSeAllocateGuestVirtualMemory( WHSE_PARTITION* Partition, PVOID* HostVa
 			return hresult;
 	}
 
+	uintptr_t gpa { };
+	hresult = WhSeTranslateGvaToGpa( Partition, startingGva, &gpa, nullptr );
+	if ( FAILED( hresult ) )
+		return hresult;
+
+	hresult = ::WHvMapGpaRange( Partition->Handle, allocatedHostVa, static_cast< WHV_GUEST_PHYSICAL_ADDRESS >( gpa ), size, Flags );
+
 	*HostVa = allocatedHostVa;
 	*Size = size;
 

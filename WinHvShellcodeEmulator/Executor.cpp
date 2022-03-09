@@ -9,9 +9,6 @@
 
 #include <stdio.h>
 
-
-#include <vector>
-
 #define EXIT_WITH_MESSAGE( x ) \
 	{ \
 		printf( x "\n" ); \
@@ -358,7 +355,7 @@ DWORD WINAPI Execute( const EXECUTOR_OPTIONS& options ) {
 	// Allocate stack
 	//
 	PVOID stackHva = nullptr;
-	constexpr uintptr_t stackGva = 0x00007FFF'FFFF0000 - 0x1000000;
+	constexpr uintptr_t stackGva = 0x00007FFF'00000000 - 0x1000000;
 	size_t stackSize = 1 * 1024 * 1024;
 	if ( FAILED( WhSeAllocateGuestVirtualMemory( partition, &stackHva, stackGva, &stackSize, WHvMapGpaRangeFlagRead | WHvMapGpaRangeFlagWrite ) ) )
 		EXIT_WITH_MESSAGE( "Failed to allocate stack" );
@@ -397,15 +394,6 @@ DWORD WINAPI Execute( const EXECUTOR_OPTIONS& options ) {
 	// Wait until execution finishes or an unhandled vcpu exit
 	//
 	::WaitForSingleObject( thread, INFINITE );
-
-	// debug code
-	std::vector<uint8_t> codeBytes( reinterpret_cast< uint8_t* >( shellcode ), reinterpret_cast< uint8_t* >( reinterpret_cast< uintptr_t >( shellcode ) + options.CodeSize ) );
-	std::vector<uint8_t> stackBytes( reinterpret_cast< uint8_t* >( stackHva ), reinterpret_cast< uint8_t* >( reinterpret_cast< uintptr_t >( stackHva ) + stackSize ) );
-
-	auto it = std::find_if( std::begin( stackBytes ), std::end( stackBytes ), [] ( uint8_t b ) { return b != 0; } );
-	bool is_end = it == std::end( stackBytes );
-
-	// debug code
 
 	uint32_t exitCode;
 	::GetExitCodeThread( thread, reinterpret_cast< LPDWORD >( &exitCode ) );

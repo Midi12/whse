@@ -247,20 +247,39 @@ HRESULT WhSiInsertPageTableEntry( WHSE_PARTITION* Partition, uintptr_t VirtualAd
 		return hresult;
 
 	auto pt = reinterpret_cast< PMMPTE_HARDWARE >( ptHva );
-	auto pte = pt[ ptIdx ];
-	if ( pte.Valid == FALSE ) {
-		// Allocate a Page Table page
-		//
-		hresult = WhSpInsertPageTableEntry(
-			Partition,
-			pt,
-			ptIdx
-		);
+	auto ppte = &pt[ ptIdx ];
+	if ( ppte->Valid == FALSE ) {
+		//// Allocate a Page Table page
+		////
+		//hresult = WhSpInsertPageTableEntry(
+		//	Partition,
+		//	pt,
+		//	ptIdx
+		//);
 
+		//if ( FAILED( hresult ) )
+		//	return hresult;
+
+		//pte = pt[ ptIdx ];
+
+		// Get the next available physical page
+		//
+		uintptr_t gpa { };
+		auto hresult = WhSiGetNextPhysicalPage( Partition, &gpa );
 		if ( FAILED( hresult ) )
 			return hresult;
 
-		pte = pt[ ptIdx ];
+		// Create a valid PTE
+		//
+		MMPTE_HARDWARE pte { };
+
+		pte.AsUlonglong = 0;							// Ensure zeroed
+		pte.Valid = 1;									// Intel's Present bit
+		pte.Write = 1;									// Intel's Read/Write bit
+		pte.Owner = 1;									// Intel's User/Supervisor bit, let's say it is a user accessible frame
+		pte.PageFrameNumber = ( gpa / PAGE_SIZE );		// Physical address of PDP page
+
+		*ppte = pte;
 	}
 
 	return S_OK;
