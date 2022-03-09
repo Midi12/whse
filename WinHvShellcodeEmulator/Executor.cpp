@@ -19,7 +19,7 @@
 
 constexpr size_t PAGE_SIZE = 4096;
 
-constexpr size_t ALIGN_PAGE( size_t x ) {
+constexpr size_t ALIGN_PAGE_SIZE( size_t x ) {
 	return ( ( PAGE_SIZE - 1 ) & x ) ? ( ( x + PAGE_SIZE ) & ~( PAGE_SIZE - 1 ) ) : x;
 }
 
@@ -364,17 +364,17 @@ DWORD WINAPI Execute( const EXECUTOR_OPTIONS& options ) {
 
 	// Allocate code
 	//
-	auto shellcode = ::VirtualAlloc( nullptr, ALIGN_PAGE( options.CodeSize ), MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE );
+	auto shellcode = ::VirtualAlloc( nullptr, ALIGN_PAGE_SIZE( options.CodeSize ), MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE );
 	if ( shellcode == nullptr )
 		EXIT_WITH_MESSAGE( "Failed to allocate shellcode backing memory (host)" );
 
 	::CopyMemory( shellcode, options.Code, options.CodeSize );
 
 	constexpr uintptr_t codeGva = 0x10000;
-	if( FAILED( WhSeMapHostToGuestVirtualMemory( partition, shellcode, codeGva, ALIGN_PAGE( options.CodeSize ), WHvMapGpaRangeFlagRead | WHvMapGpaRangeFlagWrite | WHvMapGpaRangeFlagExecute ) ) )
+	if( FAILED( WhSeMapHostToGuestVirtualMemory( partition, shellcode, codeGva, ALIGN_PAGE_SIZE( options.CodeSize ), WHvMapGpaRangeFlagRead | WHvMapGpaRangeFlagWrite | WHvMapGpaRangeFlagExecute ) ) )
 		EXIT_WITH_MESSAGE( "Failed to map shellcode" );
 
-	printf( "Allocated code memory %llx (size = %llx, allocated = %llx)\n", static_cast< unsigned long long >( codeGva ), static_cast< unsigned long long >( options.CodeSize ), static_cast< unsigned long long >( ALIGN_PAGE( options.CodeSize ) ) );
+	printf( "Allocated code memory %llx (size = %llx, allocated = %llx)\n", static_cast< unsigned long long >( codeGva ), static_cast< unsigned long long >( options.CodeSize ), static_cast< unsigned long long >( ALIGN_PAGE_SIZE( options.CodeSize ) ) );
 
 	// Run the processor
 	//
