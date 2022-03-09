@@ -22,8 +22,12 @@ constexpr size_t operator ""TiB( size_t x ) {
 
 constexpr size_t PAGE_SIZE = 4096;
 
-constexpr size_t ALIGN_PAGE( size_t x ) {
+constexpr size_t ALIGN_PAGE_SIZE( size_t x ) {
 	return ( ( PAGE_SIZE - 1 ) & x ) ? ( ( x + PAGE_SIZE ) & ~( PAGE_SIZE - 1 ) ) : x;
+}
+
+constexpr uintptr_t ALIGN_PAGE( uintptr_t x ) {
+	return x & ~( PAGE_SIZE - 1 );
 }
 
 constexpr bool HAS_FLAGS( uint32_t x, uint32_t y ) {

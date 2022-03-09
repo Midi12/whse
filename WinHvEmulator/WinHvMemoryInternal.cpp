@@ -59,7 +59,7 @@ HRESULT WhSiAllocateGuestPhysicalMemory( WHSE_PARTITION* Partition, PVOID* HostV
 		return hresult;
 
 	PVOID hostVa = nullptr;
-	size_t size = ALIGN_PAGE( *Size );
+	size_t size = ALIGN_PAGE_SIZE( *Size );
 	hresult = WhSeAllocateGuestPhysicalMemory( Partition, &hostVa, physicalAddress, &size, Flags );
 	if ( FAILED( hresult ) )
 		return hresult;
@@ -284,23 +284,28 @@ HRESULT WhSiFindBestGVA( WHSE_PARTITION* Partition, uintptr_t* GuestVa, size_t S
 		return HRESULT_FROM_WIN32( ERROR_NO_MORE_ITEMS );
 
 	uintptr_t highestExistingGva = 0;
+	size_t highestExistingGvaSize = 0;
 	auto current = first;
 	while ( current != nullptr ) {
 		uintptr_t currentGva = reinterpret_cast< uintptr_t >( current->GuestVirtualAddress );
-		if ( currentGva > highestExistingGva )
+		if ( currentGva > highestExistingGva ) {
 			highestExistingGva = currentGva;
-		
+		}
+
 		current = reinterpret_cast< WHSE_ALLOCATION_NODE* >( current->Next );
 	}
 
-	auto va = ALIGN_PAGE( reinterpret_cast< uintptr_t >( current->GuestVirtualAddress ) + current->Size );
+	if ( current == nullptr )
+		return HRESULT_FROM_WIN32( ERROR_NO_MORE_ITEMS );
+
+	auto va = ALIGN_PAGE_SIZE( highestExistingGva + highestExistingGvaSize );
 
 	// WHSE_ALLOCATION_NODE* node = reinterpret_cast< WHSE_ALLOCATION_NODE* >( ::HeapAlloc( ::GetProcessHeap(), HEAP_ZERO_MEMORY, sizeof( decltype( *node ) ) ) );
 	// if ( node == nullptr )
 	// 	return HRESULT_FROM_WIN32( ERROR_OUTOFMEMORY );
 
 	// node->GuestVirtualAddress = reinterpret_cast< PVOID >( va );
-	// node->Size = ALIGN_PAGE( Size );
+	// node->Size = ALIGN_PAGE_SIZE( Size );
 	// ::InterlockedPushEntrySList( tracker, node );
 
 	*GuestVa = va;

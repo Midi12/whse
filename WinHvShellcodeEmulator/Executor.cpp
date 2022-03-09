@@ -401,6 +401,10 @@ DWORD WINAPI Execute( const EXECUTOR_OPTIONS& options ) {
 	// debug code
 	std::vector<uint8_t> codeBytes( reinterpret_cast< uint8_t* >( shellcode ), reinterpret_cast< uint8_t* >( reinterpret_cast< uintptr_t >( shellcode ) + options.CodeSize ) );
 	std::vector<uint8_t> stackBytes( reinterpret_cast< uint8_t* >( stackHva ), reinterpret_cast< uint8_t* >( reinterpret_cast< uintptr_t >( stackHva ) + stackSize ) );
+
+	auto it = std::find_if( std::begin( stackBytes ), std::end( stackBytes ), [] ( uint8_t b ) { return b != 0; } );
+	bool is_end = it == std::end( stackBytes );
+
 	// debug code
 
 	uint32_t exitCode;

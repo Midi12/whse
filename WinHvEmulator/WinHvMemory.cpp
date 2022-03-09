@@ -34,7 +34,7 @@ HRESULT WhSeAllocateGuestPhysicalMemory( WHSE_PARTITION* Partition, PVOID* HostV
 	if ( *HostVa != nullptr )
 		return HRESULT_FROM_WIN32( ERROR_INVALID_PARAMETER );
 
-	auto size = ALIGN_PAGE( *Size );
+	auto size = ALIGN_PAGE_SIZE( *Size );
 
 	// Allocate memory into host
 	//
@@ -62,7 +62,7 @@ HRESULT WHSEAPI WhSeMapHostToGuestPhysicalMemory( WHSE_PARTITION* Partition, PVO
 
 	// Map the memory range into the guest physical address space
 	//
-	return ::WHvMapGpaRange( Partition->Handle, HostVa, static_cast< WHV_GUEST_PHYSICAL_ADDRESS >( GuestPa ), ALIGN_PAGE( Size ), Flags );
+	return ::WHvMapGpaRange( Partition->Handle, HostVa, static_cast< WHV_GUEST_PHYSICAL_ADDRESS >( GuestPa ), ALIGN_PAGE_SIZE( Size ), Flags );
 }
 
 // Allocate memory in guest virtual address space (backed by host memory)
@@ -77,7 +77,7 @@ HRESULT WhSeAllocateGuestVirtualMemory( WHSE_PARTITION* Partition, PVOID* HostVa
 	if ( *HostVa != nullptr )
 		return HRESULT_FROM_WIN32( ERROR_INVALID_PARAMETER );
 
-	auto size = ALIGN_PAGE( *Size );
+	auto size = ALIGN_PAGE_SIZE( *Size );
 
 	// Allocate memory into host
 	//
@@ -86,27 +86,44 @@ HRESULT WhSeAllocateGuestVirtualMemory( WHSE_PARTITION* Partition, PVOID* HostVa
 	if ( allocatedHostVa == nullptr )
 		return WhSeGetLastHresult();
 
-	*HostVa = allocatedHostVa;
-	*Size = size;
-
 	auto hresult = S_OK;
 
-	// No guest VA specified, let the system choose it
+	// Compute starting and ending guest virtual addresses
 	//
-	if ( GuestVa == 0) {
-		if ( FAILED( hresult = WhSiFindBestGVA( Partition, &GuestVa, size ) ) )
+	auto startingGva = ALIGN_PAGE( GuestVa );
+	auto endingGva = ALIGN_PAGE_SIZE( startingGva + size );
+
+	// Setup matching PTEs (and allocate guest physical memory accordingly)
+	//
+	for ( auto gva = startingGva; gva < endingGva; gva += PAGE_SIZE ) {
+		hresult = WhSiInsertPageTableEntry( Partition, gva );
+		if ( FAILED( hresult ) )
 			return hresult;
 	}
 
-	uintptr_t gpa { };
-	WHV_TRANSLATE_GVA_RESULT translateResult { };
-	hresult = WhSeTranslateGvaToGpa( Partition, GuestVa, &gpa, &translateResult );
-	if ( FAILED( hresult ) )
-		return hresult;
+	*HostVa = allocatedHostVa;
+	*Size = size;
 
-	// Create the allocated range into the guest address space
-	//
-	return ::WHvMapGpaRange( Partition->Handle, allocatedHostVa, static_cast< WHV_GUEST_PHYSICAL_ADDRESS >( gpa ), size, Flags );
+	return hresult;
+
+	//auto hresult = S_OK;
+
+	//// No guest VA specified, let the system choose it
+	////
+	//if ( GuestVa == 0) {
+	//	if ( FAILED( hresult = WhSiFindBestGVA( Partition, &GuestVa, size ) ) )
+	//		return hresult;
+	//}
+
+	//uintptr_t gpa { };
+	//WHV_TRANSLATE_GVA_RESULT translateResult { };
+	//hresult = WhSeTranslateGvaToGpa( Partition, GuestVa, &gpa, &translateResult );
+	//if ( FAILED( hresult ) )
+	//	return hresult;
+
+	//// Create the allocated range into the guest address space
+	////
+	//return ::WHvMapGpaRange( Partition->Handle, allocatedHostVa, static_cast< WHV_GUEST_PHYSICAL_ADDRESS >( gpa ), size, Flags );
 }
 
 // Map memory from host to guest virtual address space (backed by host memory)
@@ -118,15 +135,73 @@ HRESULT WHSEAPI WhSeMapHostToGuestVirtualMemory( WHSE_PARTITION* Partition, PVOI
 	if ( HostVa == nullptr )
 		return HRESULT_FROM_WIN32( ERROR_INVALID_PARAMETER );
 
+	//uintptr_t gpa { };
+	//WHV_TRANSLATE_GVA_RESULT translateResult { };
+	//auto hresult = WhSeTranslateGvaToGpa( Partition, GuestVa, &gpa, &translateResult );
+	//if ( FAILED( hresult ) )
+	//	return hresult;
+
+	//// Map the memory range into the guest address space
+	////
+	//return ::WHvMapGpaRange( Partition->Handle, HostVa, static_cast< WHV_GUEST_PHYSICAL_ADDRESS >( gpa ), ALIGN_PAGE_SIZE( Size ), Flags );
+
+	auto hresult = S_OK;
+
+	// Compute starting and ending guest virtual addresses
+	//
+	auto startingGva = ALIGN_PAGE( GuestVa );
+	auto endingGva = ALIGN_PAGE_SIZE( startingGva + Size );
+
+	// Setup matching PTEs (and allocate guest physical memory accordingly)
+	//
+	for ( auto gva = startingGva; gva < endingGva; gva += PAGE_SIZE ) {
+		hresult = WhSiInsertPageTableEntry( Partition, gva );
+		if ( FAILED( hresult ) )
+			return hresult;
+	}
+
+	//auto tracker = Partition->MemoryLayout.AllocationTracker;
+	//if ( tracker == nullptr )
+	//	return HRESULT_FROM_WIN32( PEERDIST_ERROR_NOT_INITIALIZED );
+
+	//auto first = reinterpret_cast< WHSE_ALLOCATION_NODE* >( ::RtlFirstEntrySList( tracker ) );
+	//if ( first == nullptr )
+	//	return HRESULT_FROM_WIN32( ERROR_NO_MORE_ITEMS );
+
+	//// Find the host virtual addresses for our allocated physical memory
+	////
+	//for ( auto gva = startingGva; gva < endingGva; gva += PAGE_SIZE ) {
+	//	uintptr_t gpa { };
+	//	hresult = WhSeTranslateGvaToGpa( Partition, gva, &gpa, nullptr );
+	//	if ( FAILED( hresult ) )
+	//		return hresult;
+
+	//	auto current = first;
+	//	decltype( current ) node = nullptr;
+	//	while ( current != nullptr ) {
+	//		if ( current->GuestPhysicalAddress == gpa ) {
+	//			node = current;
+	//			break;
+	//		}
+
+	//		current = reinterpret_cast< WHSE_ALLOCATION_NODE* >( current->Next );
+	//	}
+
+	//	if ( node == nullptr )
+	//		return HRESULT_FROM_WIN32( ERROR_NOT_FOUND );
+
+	//	memcpy( current->HostVirtualAddress, reinterpret_cast< const void* >( reinterpret_cast< uintptr_t >( HostVa ) + gva - startingGva ), PAGE_SIZE );
+
+	//}
+
 	uintptr_t gpa { };
-	WHV_TRANSLATE_GVA_RESULT translateResult { };
-	auto hresult = WhSeTranslateGvaToGpa( Partition, GuestVa, &gpa, &translateResult );
+	hresult = WhSeTranslateGvaToGpa( Partition, startingGva, &gpa, nullptr );
 	if ( FAILED( hresult ) )
 		return hresult;
 
-	// Map the memory range into the guest address space
-	//
-	return ::WHvMapGpaRange( Partition->Handle, HostVa, static_cast< WHV_GUEST_PHYSICAL_ADDRESS >( gpa ), ALIGN_PAGE( Size ), Flags );
+	hresult = ::WHvMapGpaRange( Partition->Handle, HostVa, static_cast< WHV_GUEST_PHYSICAL_ADDRESS >( gpa ), ALIGN_PAGE_SIZE( Size ), Flags );
+
+	return hresult;
 }
 
 // Free memory in guest address space
@@ -138,7 +213,7 @@ HRESULT WhSeFreeGuestMemory( WHSE_PARTITION* Partition, PVOID HostVa, uintptr_t 
 	if ( HostVa == nullptr )
 		return HRESULT_FROM_WIN32( ERROR_INVALID_PARAMETER );
 
-	auto size = ALIGN_PAGE( Size );
+	auto size = ALIGN_PAGE_SIZE( Size );
 
 	auto hresult = ::WHvUnmapGpaRange( Partition->Handle, static_cast< WHV_GUEST_PHYSICAL_ADDRESS >( GuestVa ), size );
 	if ( FAILED( hresult ) )
