@@ -1,0 +1,9 @@
+[ ] Current code polish pass
+[ ] Callback system to handle vm exits
+[ ] Benchmarks
+	[  ]Find C (or a C++ with C style interface) Benchmark library
+[ ] Documentation
+	[ ] Find a documentation support
+[ ] Unit tests
+	[ ] Find C (or a C++ with C style interface) Unit Testing library
+[ ] Add babama to the credits for his greatness in private messages
