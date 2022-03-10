@@ -1,5 +1,7 @@
 #include "WinHvProcessor.hpp"
 
+#include <memory.h>
+
 // Create a virtual processor in a partition
 //
 HRESULT WhSeCreateProcessor( WHSE_PARTITION* Partition ) {
@@ -27,10 +29,9 @@ HRESULT WhSeSetProcessorRegisters( WHSE_PARTITION* Partition, WHSE_REGISTERS Reg
 		return HRESULT_FROM_WIN32( ERROR_INVALID_PARAMETER );
 
 	auto vp = &Partition->VirtualProcessor;
-	if ( vp->Registers != Registers ) {
-		::CopyMemory( vp->Registers, Registers, sizeof( decltype( *vp->Registers ) ) );
-	}
-	
+	if ( vp->Registers != Registers )
+		memcpy_s( vp->Registers, sizeof( decltype( *vp->Registers ) ), Registers, sizeof( decltype( *vp->Registers ) ) );
+
 	return ::WHvSetVirtualProcessorRegisters( Partition->Handle, vp->Index, g_registers, g_registers_count, vp->Registers );
 }
 

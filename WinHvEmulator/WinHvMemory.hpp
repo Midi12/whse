@@ -37,8 +37,4 @@ HRESULT WHSEAPI WhSeInitializeMemoryLayout( WHSE_PARTITION* Partition );
 //
 HRESULT WHSEAPI WhSeTranslateGvaToGpa( WHSE_PARTITION* Partition, uintptr_t VirtualAddress, uintptr_t* PhysicalAddress, WHV_TRANSLATE_GVA_RESULT* TranslationResult );
 
-// Page fault handler
-//
-HRESULT WHSEAPI WhSePageFaultHandler( WHSE_PARTITION* Partition );
-
 #endif // !WINHVMEMORY_HPP

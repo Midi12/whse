@@ -189,9 +189,10 @@ HRESULT WhSiInsertPageTableEntry( WHSE_PARTITION* Partition, uintptr_t VirtualAd
 		// Shouldn't happen as we initialized all PLM4 entries upfront
 		//
 		DebugBreak();
+		return HRESULT_FROM_WIN32( ERROR_INTERNAL_ERROR );
 	}
 	
-	// Search entry in PDP
+	// Search entry in Page Directory Pointers
 	// 
 	PVOID pdpHva = nullptr;
 	hresult = WhSpLookupHVAFromPFN( Partition, pml4e.PageFrameNumber, &pdpHva );
@@ -215,7 +216,7 @@ HRESULT WhSiInsertPageTableEntry( WHSE_PARTITION* Partition, uintptr_t VirtualAd
 		pdpe = pdp[ pdpIdx ];
 	}
 
-	// Search entry in PD
+	// Search entry in Page Directories
 	//
 	PVOID pdHva = nullptr;
 	hresult = WhSpLookupHVAFromPFN( Partition, pdpe.PageFrameNumber, &pdHva );
@@ -239,7 +240,7 @@ HRESULT WhSiInsertPageTableEntry( WHSE_PARTITION* Partition, uintptr_t VirtualAd
 		pde = pd[ pdIdx ];
 	}
 
-	// Add entry in PT
+	// Add entry in Page Tables
 	//
 	PVOID ptHva = nullptr;
 	hresult = WhSpLookupHVAFromPFN( Partition, pde.PageFrameNumber, &ptHva );

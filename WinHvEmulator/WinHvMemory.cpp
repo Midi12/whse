@@ -3,6 +3,7 @@
 #include "WinHvHelpers.hpp"
 #include "WinHvProcessor.hpp"
 #include "WinHvUtils.hpp"
+#include "winbase.h"
 
 constexpr uint32_t AccessFlagsToProtectionFlags( WHSE_MEMORY_ACCESS_FLAGS flags ) {
 	uint32_t protectionFlags = 0;
@@ -43,12 +44,20 @@ HRESULT WhSeAllocateGuestPhysicalMemory( WHSE_PARTITION* Partition, PVOID* HostV
 	if ( allocatedHostVa == nullptr )
 		return WhSeGetLastHresult();
 
+	auto hresult = ::WHvMapGpaRange( Partition->Handle, allocatedHostVa, static_cast< WHV_GUEST_PHYSICAL_ADDRESS >( GuestPa ), size, Flags );
+	if ( FAILED( hresult ) ) {
+		if ( allocatedHostVa != nullptr )
+			::VirtualFree( allocatedHostVa, 0, MEM_RELEASE );
+
+		return hresult;
+	}
+
 	*HostVa = allocatedHostVa;
 	*Size = size;
 
 	// Create the allocated range into the guest physical address space
 	//
-	return ::WHvMapGpaRange( Partition->Handle, allocatedHostVa, static_cast< WHV_GUEST_PHYSICAL_ADDRESS >( GuestPa ), size, Flags );
+	return hresult;
 }
 
 // Map memory from host to guest physical address space (backed by host memory)
@@ -93,7 +102,7 @@ HRESULT WhSeAllocateGuestVirtualMemory( WHSE_PARTITION* Partition, PVOID* HostVa
 	auto startingGva = ALIGN_PAGE( GuestVa );
 	auto endingGva = ALIGN_PAGE_SIZE( startingGva + size );
 
-	// Setup matching PTEs (and allocate guest physical memory accordingly)
+	// Setup matching PTEs
 	//
 	for ( auto gva = startingGva; gva < endingGva; gva += PAGE_SIZE ) {
 		hresult = WhSiInsertPageTableEntry( Partition, gva );
@@ -107,6 +116,12 @@ HRESULT WhSeAllocateGuestVirtualMemory( WHSE_PARTITION* Partition, PVOID* HostVa
 		return hresult;
 
 	hresult = ::WHvMapGpaRange( Partition->Handle, allocatedHostVa, static_cast< WHV_GUEST_PHYSICAL_ADDRESS >( gpa ), size, Flags );
+	if ( FAILED( hresult ) ) {
+		if ( allocatedHostVa != nullptr )
+			::VirtualFree( allocatedHostVa, 0, MEM_RELEASE );
+
+		return hresult;
+	}
 
 	*HostVa = allocatedHostVa;
 	*Size = size;
@@ -143,9 +158,7 @@ HRESULT WHSEAPI WhSeMapHostToGuestVirtualMemory( WHSE_PARTITION* Partition, PVOI
 	if ( FAILED( hresult ) )
 		return hresult;
 
-	hresult = ::WHvMapGpaRange( Partition->Handle, HostVa, static_cast< WHV_GUEST_PHYSICAL_ADDRESS >( gpa ), ALIGN_PAGE_SIZE( Size ), Flags );
-
-	return hresult;
+	return ::WHvMapGpaRange( Partition->Handle, HostVa, static_cast< WHV_GUEST_PHYSICAL_ADDRESS >( gpa ), ALIGN_PAGE_SIZE( Size ), Flags );
 }
 
 // Free memory in guest address space
@@ -168,20 +181,6 @@ HRESULT WhSeFreeGuestMemory( WHSE_PARTITION* Partition, PVOID HostVa, uintptr_t 
 		return WhSeGetLastHresult();
 
 	return hresult;
-}
-
-// Copy memory from host address space to guest address space
-//
-HRESULT WhSeCopyHostToGuestMemory( WHSE_PARTITION* Partition, PVOID GuestDestVa, const void* HostSourceVa, size_t Size ) {
-	if ( Partition == nullptr )
-		return HRESULT_FROM_WIN32( ERROR_INVALID_PARAMETER );
-
-	if ( HostSourceVa == nullptr )
-		return HRESULT_FROM_WIN32( ERROR_INVALID_PARAMETER );
-
-	// Map the source data into the guest address space
-	//
-	return ::WHvMapGpaRange( Partition->Handle, const_cast< void* >( HostSourceVa ), reinterpret_cast< WHV_GUEST_PHYSICAL_ADDRESS >( GuestDestVa ), Size, WHvMapGpaRangeFlagRead | WHvMapGpaRangeFlagWrite | WHvMapGpaRangeFlagExecute );
 }
 
 // Initialize paging and other memory stuff for the partition
@@ -244,6 +243,7 @@ HRESULT WhSeTranslateGvaToGpa( WHSE_PARTITION* Partition, uintptr_t VirtualAddre
 	WHV_TRANSLATE_GVA_FLAGS flags = WHvTranslateGvaFlagValidateRead | WHvTranslateGvaFlagValidateWrite /*| WHvTranslateGvaFlagPrivilegeExempt*/;
 
 	auto hresult = S_OK;
+	auto tries = 0;
 	
 	do {
 		hresult = ::WHvTranslateGva(
@@ -277,7 +277,9 @@ HRESULT WhSeTranslateGvaToGpa( WHSE_PARTITION* Partition, uintptr_t VirtualAddre
 			default:
 				break;
 		}
-	} while ( hresult == S_OK && translationResult.ResultCode != WHvTranslateGvaResultSuccess );
+
+		tries++;
+	} while ( tries < 2 && hresult == S_OK && translationResult.ResultCode != WHvTranslateGvaResultSuccess );
 
 	if ( FAILED( hresult ) )
 		return hresult;
@@ -288,10 +290,4 @@ HRESULT WhSeTranslateGvaToGpa( WHSE_PARTITION* Partition, uintptr_t VirtualAddre
 		*TranslationResult = translationResult;
 
 	return hresult;
-}
-
-// Page fault handler
-//
-HRESULT WHSEAPI WhSePageFaultHandler( WHSE_PARTITION* Partition ) {
-	return S_OK;
 }

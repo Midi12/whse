@@ -2,11 +2,11 @@
 
 // Create an hypervisor partition
 //
-HRESULT WhSeCreatePartition( WHSE_PARTITION** pPartition ) {
-	if ( pPartition == nullptr )
+HRESULT WhSeCreatePartition( WHSE_PARTITION** Partition ) {
+	if ( Partition == nullptr )
 		return HRESULT_FROM_WIN32( ERROR_INVALID_PARAMETER );
 
-	if ( *pPartition != nullptr )
+	if ( *Partition != nullptr )
 		return HRESULT_FROM_WIN32( ERROR_INVALID_PARAMETER );
 
 	WHV_PARTITION_HANDLE partitionHandle { };
@@ -33,9 +33,9 @@ HRESULT WhSeCreatePartition( WHSE_PARTITION** pPartition ) {
 
 	// Allocate the partition structure
 	//
-	*pPartition = reinterpret_cast< WHSE_PARTITION* >( ::HeapAlloc( ::GetProcessHeap(), HEAP_ZERO_MEMORY, sizeof( decltype( **pPartition ) ) ) );
+	*Partition = reinterpret_cast< WHSE_PARTITION* >( ::HeapAlloc( ::GetProcessHeap(), HEAP_ZERO_MEMORY, sizeof( decltype( **Partition ) ) ) );
 
-	if ( *pPartition == nullptr ) {
+	if ( *Partition == nullptr ) {
 		// Allocation failed
 		//
 		hresult = HRESULT_FROM_WIN32( ERROR_OUTOFMEMORY );
@@ -47,7 +47,7 @@ HRESULT WhSeCreatePartition( WHSE_PARTITION** pPartition ) {
 	else {
 		// Set the handle
 		//
-		( *pPartition )->Handle = partitionHandle;
+		( *Partition )->Handle = partitionHandle;
 	}
 
 	return hresult;
