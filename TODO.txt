@@ -1,5 +1,7 @@
-[ ] Current code polish pass
+[x] Current code polish pass
 [ ] Callback system to handle vm exits
+[ ] Correct typedefs (MS style) to suppress warnings
+[ ] Private api in their own file
 [ ] Benchmarks
 	[  ]Find C (or a C++ with C style interface) Benchmark library
 [ ] Documentation
