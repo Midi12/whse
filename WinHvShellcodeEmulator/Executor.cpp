@@ -249,8 +249,6 @@ DWORD WINAPI ExecuteThread( LPVOID lpParameter ) {
 	//
 	HRESULT hresult = S_OK;
 	for ( ;; ) {
-		// todo : add mutex to break
-
 		WHSE_VP_EXIT_REASON exitReason;
 		if ( FAILED( hresult = WhSeRunProcessor( partition, &exitReason ) ) )
 			break;

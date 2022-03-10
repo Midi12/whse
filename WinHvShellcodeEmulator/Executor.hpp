@@ -22,7 +22,7 @@ typedef struct EXECUTOR_PARAMS {
 
 typedef struct EXECUTOR_OPTIONS {
 	uint8_t* Code;
-    size_t CodeSize;
+	size_t CodeSize;
 	uintptr_t BaseAddress;
 	PROCESSOR_MODE Mode;
 };
