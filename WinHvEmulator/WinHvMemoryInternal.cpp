@@ -249,19 +249,6 @@ HRESULT WhSiInsertPageTableEntry( WHSE_PARTITION* Partition, uintptr_t VirtualAd
 	auto pt = reinterpret_cast< PMMPTE_HARDWARE >( ptHva );
 	auto ppte = &pt[ ptIdx ];
 	if ( ppte->Valid == FALSE ) {
-		//// Allocate a Page Table page
-		////
-		//hresult = WhSpInsertPageTableEntry(
-		//	Partition,
-		//	pt,
-		//	ptIdx
-		//);
-
-		//if ( FAILED( hresult ) )
-		//	return hresult;
-
-		//pte = pt[ ptIdx ];
-
 		// Get the next available physical page
 		//
 		uintptr_t gpa { };
@@ -318,14 +305,6 @@ HRESULT WhSiFindBestGVA( WHSE_PARTITION* Partition, uintptr_t* GuestVa, size_t S
 		return HRESULT_FROM_WIN32( ERROR_NO_MORE_ITEMS );
 
 	auto va = ALIGN_PAGE_SIZE( highestExistingGva + highestExistingGvaSize );
-
-	// WHSE_ALLOCATION_NODE* node = reinterpret_cast< WHSE_ALLOCATION_NODE* >( ::HeapAlloc( ::GetProcessHeap(), HEAP_ZERO_MEMORY, sizeof( decltype( *node ) ) ) );
-	// if ( node == nullptr )
-	// 	return HRESULT_FROM_WIN32( ERROR_OUTOFMEMORY );
-
-	// node->GuestVirtualAddress = reinterpret_cast< PVOID >( va );
-	// node->Size = ALIGN_PAGE_SIZE( Size );
-	// ::InterlockedPushEntrySList( tracker, node );
 
 	*GuestVa = va;
 

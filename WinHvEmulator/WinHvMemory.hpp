@@ -25,7 +25,6 @@ HRESULT WHSEAPI WhSeAllocateGuestVirtualMemory( WHSE_PARTITION* Partition, PVOID
 //
 HRESULT WHSEAPI WhSeMapHostToGuestVirtualMemory( WHSE_PARTITION* Partition, PVOID HostVa, uintptr_t GuestVa, size_t Size, WHSE_MEMORY_ACCESS_FLAGS Flags );
 
-
 // Free memory in guest address space
 //
 HRESULT WHSEAPI WhSeFreeGuestMemory( WHSE_PARTITION* Partition, PVOID HostVa, uintptr_t GuestVa, size_t Size );
