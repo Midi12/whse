@@ -210,18 +210,19 @@ DWORD WINAPI ExecuteThread( LPVOID lpParameter ) {
 
 	// Set exit callbacks
 	//
-	partition->ExitCallbacks.MemoryAccessCallback = reinterpret_cast< WHSE_EXIT_MEMORYACCESS_CALLBACK >( &HandleExit );
-	partition->ExitCallbacks.IoPortAccessCallback = reinterpret_cast< WHSE_EXIT_IO_PORT_ACCESS_CALLBACK >( &HandleExit );
-	partition->ExitCallbacks.UnrecoverableExceptionCallback = reinterpret_cast< WHSE_EXIT_UNRECOVERABLE_EXCEPTION_CALLBACK >( &HandleExit );
-	partition->ExitCallbacks.InvalidRegisterValueCallback = reinterpret_cast< WHSE_EXIT_INVALID_REGISTER_VALUE_CALLBACK >( &HandleExit );
-	partition->ExitCallbacks.UnsupportedFeatureCallback = reinterpret_cast< WHSE_EXIT_UNSUPPORTED_FEATURE_CALLBACK >( &HandleExit );
-	partition->ExitCallbacks.InterruptionDeliveryCallback = reinterpret_cast< WHSE_EXIT_INTERRUPTION_DELIVERY_CALLBACK >( &HandleExit );
-	partition->ExitCallbacks.HaltCallback = reinterpret_cast< WHSE_EXIT_HALT_CALLBACK >( &HandleExit );
-	partition->ExitCallbacks.MsrAccessCallback = reinterpret_cast< WHSE_EXIT_MSR_ACCESS_CALLBACK >( &HandleExit );
-	partition->ExitCallbacks.CpuidAccessCallback = reinterpret_cast< WHSE_EXIT_CPUID_ACCESS_CALLBACK >( &HandleExit );
-	partition->ExitCallbacks.VirtualProcessorCallback = reinterpret_cast< WHSE_EXIT_VP_EXCEPTION_CALLBACK >( &HandleExit );
-	partition->ExitCallbacks.RdtscAccessCallback = reinterpret_cast< WHSE_EXIT_RDTSC_ACCESS_CALLBACK >( &HandleExit );
-	partition->ExitCallbacks.UserCanceledCallback = reinterpret_cast< WHSE_EXIT_USER_CANCELED_CALLBACK >( &HandleExit );
+	partition->ExitCallbacks.u.MemoryAccessCallback = reinterpret_cast< WHSE_EXIT_MEMORYACCESS_CALLBACK >( &HandleExit );
+	partition->ExitCallbacks.u.IoPortAccessCallback = reinterpret_cast< WHSE_EXIT_IO_PORT_ACCESS_CALLBACK >( &HandleExit );
+	partition->ExitCallbacks.u.UnrecoverableExceptionCallback = reinterpret_cast< WHSE_EXIT_UNRECOVERABLE_EXCEPTION_CALLBACK >( &HandleExit );
+	partition->ExitCallbacks.u.InvalidRegisterValueCallback = reinterpret_cast< WHSE_EXIT_INVALID_REGISTER_VALUE_CALLBACK >( &HandleExit );
+	partition->ExitCallbacks.u.UnsupportedFeatureCallback = reinterpret_cast< WHSE_EXIT_UNSUPPORTED_FEATURE_CALLBACK >( &HandleExit );
+	partition->ExitCallbacks.u.InterruptionDeliveryCallback = reinterpret_cast< WHSE_EXIT_INTERRUPTION_DELIVERY_CALLBACK >( &HandleExit );
+	partition->ExitCallbacks.u.HaltCallback = reinterpret_cast< WHSE_EXIT_HALT_CALLBACK >( &HandleExit );
+	partition->ExitCallbacks.u.ApicEoiCallback = reinterpret_cast< WHSE_EXIT_APIC_EOI_CALLBACK >( &HandleExit );
+	partition->ExitCallbacks.u.MsrAccessCallback = reinterpret_cast< WHSE_EXIT_MSR_ACCESS_CALLBACK >( &HandleExit );
+	partition->ExitCallbacks.u.CpuidAccessCallback = reinterpret_cast< WHSE_EXIT_CPUID_ACCESS_CALLBACK >( &HandleExit );
+	partition->ExitCallbacks.u.VirtualProcessorCallback = reinterpret_cast< WHSE_EXIT_VP_EXCEPTION_CALLBACK >( &HandleExit );
+	partition->ExitCallbacks.u.RdtscAccessCallback = reinterpret_cast< WHSE_EXIT_RDTSC_ACCESS_CALLBACK >( &HandleExit );
+	partition->ExitCallbacks.u.UserCanceledCallback = reinterpret_cast< WHSE_EXIT_USER_CANCELED_CALLBACK >( &HandleExit );
 
 	// Main guest execution loop
 	//

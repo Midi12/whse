@@ -187,6 +187,7 @@ typedef union WHSE_EXIT_CALLBACKS {
 		WHSE_EXIT_UNSUPPORTED_FEATURE_CALLBACK		UnsupportedFeatureCallback;
 		WHSE_EXIT_INTERRUPTION_DELIVERY_CALLBACK	InterruptionDeliveryCallback;
 		WHSE_EXIT_HALT_CALLBACK						HaltCallback;
+		WHSE_EXIT_APIC_EOI_CALLBACK					ApicEoiCallback;
 		WHSE_EXIT_MSR_ACCESS_CALLBACK				MsrAccessCallback;
 		WHSE_EXIT_CPUID_ACCESS_CALLBACK				CpuidAccessCallback;
 		WHSE_EXIT_VP_EXCEPTION_CALLBACK				VirtualProcessorCallback;
@@ -197,8 +198,9 @@ typedef union WHSE_EXIT_CALLBACKS {
 	PVOID Callbacks[ WHSE_EXIT_CALLBACK_SLOT::NumberOfCallbacks ];
 };
 
-static_assert( sizeof( WHSE_EXIT_CALLBACKS::u ) == sizeof( uintptr_t ) * ( WHSE_EXIT_CALLBACK_SLOT::NumberOfCallbacks - 1 ), "Wrong WHSE_EXIT_CALLBACKS::u size" );
+static_assert( sizeof( WHSE_EXIT_CALLBACKS::u ) == sizeof( uintptr_t ) * ( WHSE_EXIT_CALLBACK_SLOT::NumberOfCallbacks ), "Wrong WHSE_EXIT_CALLBACKS::u size" );
 static_assert( sizeof( WHSE_EXIT_CALLBACKS::Callbacks ) == sizeof( uintptr_t ) * ( WHSE_EXIT_CALLBACK_SLOT::NumberOfCallbacks ), "WHSE_EXIT_CALLBACKS::Callbacks size" );
+static_assert( sizeof( WHSE_EXIT_CALLBACKS::Callbacks ) == sizeof( WHSE_EXIT_CALLBACKS::u ), "Wrong WHSE_EXIT_CALLBACKS::Callbacks or WHSE_EXIT_CALLBACKS::u size" );
 
 typedef struct WHSE_PARTITION {
 	WHSE_PARTITION_HANDLE Handle;
