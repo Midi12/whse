@@ -1,4 +1,4 @@
-#include "Executor.hpp"
+#include "Runner.hpp"
 #include "Utils.hpp"
 
 #include "winbase.h"
@@ -137,7 +137,7 @@ bool HandleExit( WHSE_PARTITION* Partition, WHV_VP_EXIT_CONTEXT* VpContext, void
 // Execute a shellcode through a virtual processor
 //
 DWORD WINAPI ExecuteThread( LPVOID lpParameter ) {
-	auto params = reinterpret_cast< EXECUTOR_PARAMS* >( lpParameter );
+	auto params = reinterpret_cast< RUN_PARAMS* >( lpParameter );
 
 	auto partition = params->Partition;
 
@@ -281,7 +281,7 @@ DWORD Cleanup( WHSE_PARTITION** Partition ) {
 
 // Execute a shellcode through a virtual processor
 //
-DWORD WINAPI Execute( const EXECUTOR_OPTIONS& options ) {
+DWORD WINAPI Run( const RUN_OPTIONS& options ) {
 	// Create partition
 	//
 	WHSE_PARTITION* partition = nullptr;
@@ -355,7 +355,7 @@ DWORD WINAPI Execute( const EXECUTOR_OPTIONS& options ) {
 
 	// Run the processor
 	//
-	EXECUTOR_PARAMS params {
+	RUN_PARAMS params {
 		.Entrypoint = codeGva,
 		.Stack = stackGva + stackSize - PAGE_SIZE, // set rsp to the end of the allocated stack range as stack "grows downward" (let 1 page on top for "safety")
 		.Partition = partition,

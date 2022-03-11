@@ -4,7 +4,7 @@
 #include "../WinHvEmulator/WinHvEmulator.hpp"
 #include "../optlist/optlist.h"
 
-#include "Executor.hpp"
+#include "Runner.hpp"
 
 #include <cstdlib>
 #include <cstdint>
@@ -65,7 +65,7 @@ bool ReadInputFile( const char* Filename, uint8_t** Code, size_t* CodeSize ) {
 // -m [kernel|user] kernel or user mode code
 // -b <base> load the shellcode at a specified virtual address
 //
-bool ParseCommandLine( int argc, char* const argv[], EXECUTOR_OPTIONS& options ) {
+bool ParseCommandLine( int argc, char* const argv[], RUN_OPTIONS& options ) {
 	option_t* options_ = nullptr;
 	options_ = GetOptList( argc, argv, "i:m:b:?" );
 
@@ -132,7 +132,7 @@ int main( int argc, char* const argv[], char* const envp[] ) {
 	SetCurrentDirectory( dir );
 #endif
 
-	EXECUTOR_OPTIONS options { };
+	RUN_OPTIONS options { };
 	if ( !ParseCommandLine( argc, argv, options ) )
 		return EXIT_SUCCESS;
 
@@ -146,7 +146,7 @@ int main( int argc, char* const argv[], char* const envp[] ) {
 
 	// Execute shellcode on a virtualized processor
 	//
-	Execute( options );
+	Run( options );
 
 	free( options.Code );
 

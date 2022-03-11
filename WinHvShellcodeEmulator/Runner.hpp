@@ -13,14 +13,14 @@ enum class PROCESSOR_MODE : uint8_t {
 	UserMode
 };
 
-typedef struct EXECUTOR_PARAMS {
+typedef struct RUN_PARAMS {
 	uintptr_t Entrypoint;
 	uintptr_t Stack;
 	WHSE_PARTITION* Partition;
 	PROCESSOR_MODE Mode;
 };
 
-typedef struct EXECUTOR_OPTIONS {
+typedef struct RUN_OPTIONS {
 	uint8_t* Code;
 	size_t CodeSize;
 	uintptr_t BaseAddress;
@@ -29,6 +29,6 @@ typedef struct EXECUTOR_OPTIONS {
 
 // Execute a shellcode through a virtual processor
 //
-DWORD WINAPI Execute( const EXECUTOR_OPTIONS& options );
+DWORD WINAPI Run( const RUN_OPTIONS& options );
 
 #endif // !EXECUTOR_HPP
