@@ -13,19 +13,19 @@ enum class PROCESSOR_MODE : uint8_t {
 	UserMode
 };
 
-typedef struct RUN_PARAMS {
+typedef struct _RUN_PARAMS {
 	uintptr_t Entrypoint;
 	uintptr_t Stack;
 	WHSE_PARTITION* Partition;
 	PROCESSOR_MODE Mode;
-};
+} RUN_PARAMS, * PRUN_PARAMS;
 
-typedef struct RUN_OPTIONS {
+typedef struct _RUN_OPTIONS {
 	uint8_t* Code;
 	size_t CodeSize;
 	uintptr_t BaseAddress;
 	PROCESSOR_MODE Mode;
-};
+} RUN_OPTIONS, * PRUN_OPTIONS;
 
 // Execute a shellcode through a virtual processor
 //
