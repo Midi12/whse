@@ -13,7 +13,7 @@ HRESULT WhSeRegisterExitCallback( WHSE_PARTITION* Partition, WHSE_EXIT_CALLBACK_
 	if ( Callback == nullptr )
 		return HRESULT_FROM_WIN32( ERROR_INVALID_PARAMETER );
 
-	Partition->ExitCallbacks[ Slot ] = Callback;
+	Partition->ExitCallbacks.Callbacks[ static_cast< int >( Slot ) ] = Callback;
 
 	return S_OK;
 }
@@ -30,7 +30,7 @@ HRESULT WhSeGetExitCallback( WHSE_PARTITION* Partition, WHSE_EXIT_CALLBACK_SLOT 
 	if ( Callback == nullptr )
 		return HRESULT_FROM_WIN32( ERROR_INVALID_PARAMETER );
 
-	*Callback = Partition->ExitCallbacks[ Slot ];
+	*Callback = Partition->ExitCallbacks.Callbacks[ Slot ];
 
 	return S_OK;
 }
@@ -44,7 +44,7 @@ HRESULT WhSeUnregisterExitCallback( WHSE_PARTITION* Partition, WHSE_EXIT_CALLBAC
 	if ( static_cast< int >( Slot ) < 0 || static_cast< int >( Slot ) >= WHSE_EXIT_CALLBACK_SLOT::NumberOfCallbacks )
 		return HRESULT_FROM_WIN32( ERROR_INVALID_PARAMETER );
 
-	Partition->ExitCallbacks[ Slot ] = nullptr;
+	Partition->ExitCallbacks.Callbacks[ Slot ] = nullptr;
 
 	return S_OK;
 }

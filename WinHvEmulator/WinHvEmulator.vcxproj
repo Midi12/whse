@@ -20,6 +20,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="dllmain.cpp" />
+    <ClCompile Include="WinHvCallbacks.cpp" />
     <ClCompile Include="WinHvHelpers.cpp" />
     <ClCompile Include="WinHvMemory.cpp" />
     <ClCompile Include="WinHvMemoryInternal.cpp" />
@@ -27,6 +28,7 @@
     <ClCompile Include="WinHvProcessor.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="WinHvCallbacks.hpp" />
     <ClInclude Include="WinHvMemoryInternal.hpp" />
     <ClInclude Include="WinHvUtils.hpp" />
     <ClInclude Include="WinHvDefs.hpp" />

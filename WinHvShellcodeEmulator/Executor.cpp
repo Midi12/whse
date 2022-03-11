@@ -122,53 +122,16 @@ constexpr size_t ALIGN_PAGE_SIZE( size_t x ) {
 
 // Handle virtual processor exit reason
 //
-HRESULT HandleExitReason( WHSE_PARTITION* Partition, WHSE_VP_EXIT_REASON ExitReason ) {
-	auto hresult = ( HRESULT ) -1;
-
-	// Handle exit reason
-	//
-	switch ( ExitReason )
-	{
-		case WHvRunVpExitReasonNone:
-		case WHvRunVpExitReasonCanceled:
-			hresult = S_OK;
-			break;
-		case WHvRunVpExitReasonMemoryAccess:
-			break;
-		case WHvRunVpExitReasonX64IoPortAccess:
-			break;
-		case WHvRunVpExitReasonUnrecoverableException:
-		{
-			auto ctx = Partition->VirtualProcessor.ExitContext;
-			auto rip = Partition->VirtualProcessor.Registers[ Rip ].Reg64;
-			auto rsp = Partition->VirtualProcessor.Registers[ Rsp ].Reg64;
-			auto cs = Partition->VirtualProcessor.Registers[ Cs ].Segment;
-			auto ss = Partition->VirtualProcessor.Registers[ Ss ].Segment;
-
-			auto a = 1;
-		}
-			break;
-		case WHvRunVpExitReasonInvalidVpRegisterValue:
-			break;
-		case WHvRunVpExitReasonUnsupportedFeature:
-			break;
-		case WHvRunVpExitReasonX64InterruptWindow:
-			break;
-		case WHvRunVpExitReasonX64Halt:
-			break;
-		case WHvRunVpExitReasonX64MsrAccess:
-			break;
-		case WHvRunVpExitReasonX64Cpuid:
-			break;
-		case WHvRunVpExitReasonException:
-			break;
-		case WHvRunVpExitReasonX64Rdtsc:
-			break;
-		default:
-			break;
-	}
+bool HandleExit( WHSE_PARTITION* Partition, WHV_VP_EXIT_CONTEXT* VpContext, void* ExitContext ) {
+	auto ctx = Partition->VirtualProcessor.ExitContext;
+	auto rip = Partition->VirtualProcessor.Registers[ Rip ].Reg64;
+	auto rsp = Partition->VirtualProcessor.Registers[ Rsp ].Reg64;
+	auto cs = Partition->VirtualProcessor.Registers[ Cs ].Segment;
+	auto ss = Partition->VirtualProcessor.Registers[ Ss ].Segment;
 	
-	return hresult;
+	// Do not retry
+	//
+	return false; 
 }
 
 // Execute a shellcode through a virtual processor
@@ -245,6 +208,21 @@ DWORD WINAPI ExecuteThread( LPVOID lpParameter ) {
 	if ( FAILED( WhSeSetProcessorRegisters( partition, registers ) ) )
 		return -1;
 
+	// Set exit callbacks
+	//
+	partition->ExitCallbacks.MemoryAccessCallback = reinterpret_cast< WHSE_EXIT_MEMORYACCESS_CALLBACK >( &HandleExit );
+	partition->ExitCallbacks.IoPortAccessCallback = reinterpret_cast< WHSE_EXIT_IO_PORT_ACCESS_CALLBACK >( &HandleExit );
+	partition->ExitCallbacks.UnrecoverableExceptionCallback = reinterpret_cast< WHSE_EXIT_UNRECOVERABLE_EXCEPTION_CALLBACK >( &HandleExit );
+	partition->ExitCallbacks.InvalidRegisterValueCallback = reinterpret_cast< WHSE_EXIT_INVALID_REGISTER_VALUE_CALLBACK >( &HandleExit );
+	partition->ExitCallbacks.UnsupportedFeatureCallback = reinterpret_cast< WHSE_EXIT_UNSUPPORTED_FEATURE_CALLBACK >( &HandleExit );
+	partition->ExitCallbacks.InterruptionDeliveryCallback = reinterpret_cast< WHSE_EXIT_INTERRUPTION_DELIVERY_CALLBACK >( &HandleExit );
+	partition->ExitCallbacks.HaltCallback = reinterpret_cast< WHSE_EXIT_HALT_CALLBACK >( &HandleExit );
+	partition->ExitCallbacks.MsrAccessCallback = reinterpret_cast< WHSE_EXIT_MSR_ACCESS_CALLBACK >( &HandleExit );
+	partition->ExitCallbacks.CpuidAccessCallback = reinterpret_cast< WHSE_EXIT_CPUID_ACCESS_CALLBACK >( &HandleExit );
+	partition->ExitCallbacks.VirtualProcessorCallback = reinterpret_cast< WHSE_EXIT_VP_EXCEPTION_CALLBACK >( &HandleExit );
+	partition->ExitCallbacks.RdtscAccessCallback = reinterpret_cast< WHSE_EXIT_RDTSC_ACCESS_CALLBACK >( &HandleExit );
+	partition->ExitCallbacks.UserCanceledCallback = reinterpret_cast< WHSE_EXIT_USER_CANCELED_CALLBACK >( &HandleExit );
+
 	// Main guest execution loop
 	//
 	HRESULT hresult = S_OK;
@@ -253,7 +231,7 @@ DWORD WINAPI ExecuteThread( LPVOID lpParameter ) {
 		if ( FAILED( hresult = WhSeRunProcessor( partition, &exitReason ) ) )
 			break;
 
-		if ( FAILED( hresult = HandleExitReason( partition, exitReason ) ) )
+		if ( exitReason != WHvRunVpExitReasonNone )
 			break;
 	}
 
