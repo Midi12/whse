@@ -192,10 +192,13 @@ typedef union WHSE_EXIT_CALLBACKS {
 		WHSE_EXIT_VP_EXCEPTION_CALLBACK				VirtualProcessorCallback;
 		WHSE_EXIT_RDTSC_ACCESS_CALLBACK				RdtscAccessCallback;
 		WHSE_EXIT_USER_CANCELED_CALLBACK			UserCanceledCallback;
-	};
+	} u;
 	
 	PVOID Callbacks[ WHSE_EXIT_CALLBACK_SLOT::NumberOfCallbacks ];
 };
+
+static_assert( sizeof( WHSE_EXIT_CALLBACKS::u ) == sizeof( uintptr_t ) * ( WHSE_EXIT_CALLBACK_SLOT::NumberOfCallbacks - 1 ) );
+static_assert( sizeof( WHSE_EXIT_CALLBACKS::Callbacks ) == sizeof( uintptr_t ) * ( WHSE_EXIT_CALLBACK_SLOT::NumberOfCallbacks ) );
 
 typedef struct WHSE_PARTITION {
 	WHSE_PARTITION_HANDLE Handle;
