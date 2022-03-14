@@ -120,13 +120,74 @@ constexpr size_t ALIGN_PAGE_SIZE( size_t x ) {
 		) & ( ~( 1 << 21 ) )									\
 	)
 
-bool HandleMemoryAccessExit( _WHSE_PARTITION* Partition, WHV_VP_EXIT_CONTEXT* VpContext, WHSE_MEMORY_ACCESS_CONTEXT* ExitContext ) {
+bool OnMemoryAccessExit( _WHSE_PARTITION* Partition, WHV_VP_EXIT_CONTEXT* VpContext, WHSE_MEMORY_ACCESS_CONTEXT* ExitContext ) {
+	printf( "HandleMemoryAccessExit" );
+	return false;
+}
+
+bool OnIoPortAccessExit( _WHSE_PARTITION* Partition, WHV_VP_EXIT_CONTEXT* VpContext, WHSE_IO_PORT_ACCESS_CONTEXT* ExitContext ) {
+	printf( "IoPortAccessCallback" );
+	return false;
+}
+
+bool OnUnrecoverableExceptionExit( _WHSE_PARTITION* Partition, WHV_VP_EXIT_CONTEXT* VpContext, WHSE_UNRECOVERABLE_EXCEPTION_CONTEXT* ExitContext ) {
+	printf( "UnrecoverableExceptionCallback" );
+	return false;
+}
+
+bool OnInvalidRegisterValueExit( _WHSE_PARTITION* Partition, WHV_VP_EXIT_CONTEXT* VpContext, WHSE_INVALID_REGISTER_VALUE_CONTEXT* ExitContext ) {
+	printf( "InvalidRegisterValueCallback" );
+	return false;
+}
+
+bool OnUnsupportedFeatureExit( _WHSE_PARTITION* Partition, WHV_VP_EXIT_CONTEXT* VpContext, WHSE_UNSUPPORTED_FEATURE_CONTEXT* ExitContext ) {
+	printf( "UnsupportedFeatureCallback" );
+	return false;
+}
+
+bool OnInterruptionDeliveryExit( _WHSE_PARTITION* Partition, WHV_VP_EXIT_CONTEXT* VpContext, WHSE_INTERRUPTION_DELIVERY_CONTEXT* ExitContext ) {
+	printf( "InterruptionDeliveryCallback" );
+	return false;
+}
+
+bool OnHaltExit( _WHSE_PARTITION* Partition, WHV_VP_EXIT_CONTEXT* VpContext, WHSE_HALT_CONTEXT* ExitContext ) {
+	printf( "HaltCallback" );
+	return false;
+}
+
+bool OnApicEoiExit( _WHSE_PARTITION* Partition, WHV_VP_EXIT_CONTEXT* VpContext, WHSE_APIC_EOI_CONTEXT* ExitContext ) {
+	printf( "ApicEoiCallback" );
+	return false;
+}
+
+bool OnMsrAccessExit( _WHSE_PARTITION* Partition, WHV_VP_EXIT_CONTEXT* VpContext, WHSE_MSR_ACCESS_CONTEXT* ExitContext ) {
+	printf( "MsrAccessCallback" );
+	return false;
+}
+
+bool OnCpuidAccessExit( _WHSE_PARTITION* Partition, WHV_VP_EXIT_CONTEXT* VpContext, WHSE_CPUID_ACCESS_CONTEXT* ExitContext ) {
+	printf( "CpuidAccessCallback" );
+	return false;
+}
+
+bool OnVirtualProcessorExit( _WHSE_PARTITION* Partition, WHV_VP_EXIT_CONTEXT* VpContext, WHSE_VP_EXCEPTION_CONTEXT* ExitContext ) {
+	printf( "VirtualProcessorCallback" );
+	return false;
+}
+
+bool OnRdtscAccessExit( _WHSE_PARTITION* Partition, WHV_VP_EXIT_CONTEXT* VpContext, WHSE_RDTSC_ACCESS_CONTEXT* ExitContext ) {
+	printf( "RdtscAccessCallback" );
+	return false;
+}
+
+bool OnUserCanceledExit( _WHSE_PARTITION* Partition, WHV_VP_EXIT_CONTEXT* VpContext, WHSE_USER_CANCELED_CONTEXT* ExitContext ) {
+	printf( "UserCanceledCallback" );
 	return false;
 }
 
 // Handle virtual processor exit reason
 //
-bool HandleExit( WHSE_PARTITION* Partition, WHV_VP_EXIT_CONTEXT* VpContext, void* ExitContext ) {
+bool OnExit( WHSE_PARTITION* Partition, WHV_VP_EXIT_CONTEXT* VpContext, void* ExitContext ) {
 	auto ctx = Partition->VirtualProcessor.ExitContext;
 	auto rip = Partition->VirtualProcessor.Registers[ Rip ].Reg64;
 	auto rsp = Partition->VirtualProcessor.Registers[ Rsp ].Reg64;
@@ -214,19 +275,19 @@ DWORD WINAPI ExecuteThread( LPVOID lpParameter ) {
 
 	// Set exit callbacks
 	//
-	partition->ExitCallbacks.u.MemoryAccessCallback = &HandleMemoryAccessExit;
-	partition->ExitCallbacks.u.IoPortAccessCallback = reinterpret_cast< WHSE_EXIT_IO_PORT_ACCESS_CALLBACK >( &HandleExit );
-	partition->ExitCallbacks.u.UnrecoverableExceptionCallback = reinterpret_cast< WHSE_EXIT_UNRECOVERABLE_EXCEPTION_CALLBACK >( &HandleExit );
-	partition->ExitCallbacks.u.InvalidRegisterValueCallback = reinterpret_cast< WHSE_EXIT_INVALID_REGISTER_VALUE_CALLBACK >( &HandleExit );
-	partition->ExitCallbacks.u.UnsupportedFeatureCallback = reinterpret_cast< WHSE_EXIT_UNSUPPORTED_FEATURE_CALLBACK >( &HandleExit );
-	partition->ExitCallbacks.u.InterruptionDeliveryCallback = reinterpret_cast< WHSE_EXIT_INTERRUPTION_DELIVERY_CALLBACK >( &HandleExit );
-	partition->ExitCallbacks.u.HaltCallback = reinterpret_cast< WHSE_EXIT_HALT_CALLBACK >( &HandleExit );
-	partition->ExitCallbacks.u.ApicEoiCallback = reinterpret_cast< WHSE_EXIT_APIC_EOI_CALLBACK >( &HandleExit );
-	partition->ExitCallbacks.u.MsrAccessCallback = reinterpret_cast< WHSE_EXIT_MSR_ACCESS_CALLBACK >( &HandleExit );
-	partition->ExitCallbacks.u.CpuidAccessCallback = reinterpret_cast< WHSE_EXIT_CPUID_ACCESS_CALLBACK >( &HandleExit );
-	partition->ExitCallbacks.u.VirtualProcessorCallback = reinterpret_cast< WHSE_EXIT_VP_EXCEPTION_CALLBACK >( &HandleExit );
-	partition->ExitCallbacks.u.RdtscAccessCallback = reinterpret_cast< WHSE_EXIT_RDTSC_ACCESS_CALLBACK >( &HandleExit );
-	partition->ExitCallbacks.u.UserCanceledCallback = reinterpret_cast< WHSE_EXIT_USER_CANCELED_CALLBACK >( &HandleExit );
+	partition->ExitCallbacks.u.MemoryAccessCallback = &OnMemoryAccessExit;
+	partition->ExitCallbacks.u.IoPortAccessCallback = &OnIoPortAccessExit;
+	partition->ExitCallbacks.u.UnrecoverableExceptionCallback = &OnUnrecoverableExceptionExit;
+	partition->ExitCallbacks.u.InvalidRegisterValueCallback = &OnInvalidRegisterValueExit;
+	partition->ExitCallbacks.u.UnsupportedFeatureCallback = &OnUnsupportedFeatureExit;
+	partition->ExitCallbacks.u.InterruptionDeliveryCallback = &OnInterruptionDeliveryExit;
+	partition->ExitCallbacks.u.HaltCallback = &OnHaltExit;
+	partition->ExitCallbacks.u.ApicEoiCallback = &OnApicEoiExit;
+	partition->ExitCallbacks.u.MsrAccessCallback = &OnMsrAccessExit;
+	partition->ExitCallbacks.u.CpuidAccessCallback = &OnCpuidAccessExit;
+	partition->ExitCallbacks.u.VirtualProcessorCallback = &OnVirtualProcessorExit;
+	partition->ExitCallbacks.u.RdtscAccessCallback = &OnRdtscAccessExit;
+	partition->ExitCallbacks.u.UserCanceledCallback = &OnUserCanceledExit;
 
 	// *---------------*
 	// | START TESTING |
