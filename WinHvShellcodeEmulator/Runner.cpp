@@ -120,6 +120,10 @@ constexpr size_t ALIGN_PAGE_SIZE( size_t x ) {
 		) & ( ~( 1 << 21 ) )									\
 	)
 
+bool HandleMemoryAccessExit( _WHSE_PARTITION* Partition, WHV_VP_EXIT_CONTEXT* VpContext, WHSE_MEMORY_ACCESS_CONTEXT* ExitContext ) {
+	return false;
+}
+
 // Handle virtual processor exit reason
 //
 bool HandleExit( WHSE_PARTITION* Partition, WHV_VP_EXIT_CONTEXT* VpContext, void* ExitContext ) {
@@ -210,7 +214,7 @@ DWORD WINAPI ExecuteThread( LPVOID lpParameter ) {
 
 	// Set exit callbacks
 	//
-	partition->ExitCallbacks.u.MemoryAccessCallback = reinterpret_cast< WHSE_EXIT_MEMORYACCESS_CALLBACK >( &HandleExit );
+	partition->ExitCallbacks.u.MemoryAccessCallback = &HandleMemoryAccessExit;
 	partition->ExitCallbacks.u.IoPortAccessCallback = reinterpret_cast< WHSE_EXIT_IO_PORT_ACCESS_CALLBACK >( &HandleExit );
 	partition->ExitCallbacks.u.UnrecoverableExceptionCallback = reinterpret_cast< WHSE_EXIT_UNRECOVERABLE_EXCEPTION_CALLBACK >( &HandleExit );
 	partition->ExitCallbacks.u.InvalidRegisterValueCallback = reinterpret_cast< WHSE_EXIT_INVALID_REGISTER_VALUE_CALLBACK >( &HandleExit );
@@ -223,6 +227,24 @@ DWORD WINAPI ExecuteThread( LPVOID lpParameter ) {
 	partition->ExitCallbacks.u.VirtualProcessorCallback = reinterpret_cast< WHSE_EXIT_VP_EXCEPTION_CALLBACK >( &HandleExit );
 	partition->ExitCallbacks.u.RdtscAccessCallback = reinterpret_cast< WHSE_EXIT_RDTSC_ACCESS_CALLBACK >( &HandleExit );
 	partition->ExitCallbacks.u.UserCanceledCallback = reinterpret_cast< WHSE_EXIT_USER_CANCELED_CALLBACK >( &HandleExit );
+
+	// *---------------*
+	// | START TESTING |
+	// *---------------*
+
+	// *---------------------------------------------------------------------------------------------------------------------------*
+	// | Allocate VA then free it, it will add the VA to the PT but unmap the backing page, this will trigger a memory access exit |
+	// *---------------------------------------------------------------------------------------------------------------------------*
+	uintptr_t gva = 0xdeadbeef;
+	PVOID hva = nullptr;
+	size_t sz = 0x1000;
+	WhSeAllocateGuestVirtualMemory( partition, &hva, gva, &sz, WHvMapGpaRangeFlagRead | WHvMapGpaRangeFlagWrite );
+
+	WhSeFreeGuestVirtualMemory( partition, hva, gva, sz );
+
+	// *---------------*
+	// |  END TESTING  |
+	// *---------------*
 
 	// Main guest execution loop
 	//
@@ -240,22 +262,6 @@ DWORD WINAPI ExecuteThread( LPVOID lpParameter ) {
 }
 
 DWORD Cleanup( WHSE_PARTITION** Partition ) {
-	// Release all allocation on backing host memory
-	//
-	auto tracker = ( *Partition )->MemoryLayout.AllocationTracker;
-	if ( tracker != nullptr ) {
-		auto first = reinterpret_cast< WHSE_ALLOCATION_NODE* >( ::RtlFirstEntrySList( tracker ) );
-		if ( first == nullptr )
-			EXIT_WITH_MESSAGE( "No element in the VA Node DB" );
-
-		auto current = first;
-		while ( current != nullptr ) {
-			::VirtualFree( current->HostVirtualAddress, 0, MEM_RELEASE );
-
-			current = reinterpret_cast< WHSE_ALLOCATION_NODE* >( current->Next );
-		}
-	}
-
 	// Release the backing memory from the PML4 directory
 	//
 	auto pml4Hva = ( *Partition )->MemoryLayout.Pml4HostVa;
@@ -361,6 +367,11 @@ DWORD WINAPI Run( const RUN_OPTIONS& options ) {
 		.Partition = partition,
 		.Mode = options.Mode
 	};
+
+	// test code
+	// alloc deadbeef va
+	// free deadbeef va
+	// test code
 
 	printf( "Starting the processor ...\n" );
 

@@ -72,6 +72,10 @@ HRESULT WhSeRunProcessor( WHSE_PARTITION* Partition, WHSE_VP_EXIT_REASON* ExitRe
 	if ( FAILED( hresult ) )
 		return hresult;
 
+	hresult = WhSeGetProcessorRegisters( Partition, vp->Registers );
+	if ( FAILED( hresult ) )
+		return hresult;
+
 	bool retry = false;
 	auto callbacks = Partition->ExitCallbacks.Callbacks;
 
@@ -180,7 +184,7 @@ HRESULT WhSeRunProcessor( WHSE_PARTITION* Partition, WHSE_VP_EXIT_REASON* ExitRe
 
 	*ExitReason = vp->ExitContext.ExitReason;
 
-	return WhSeGetProcessorRegisters( Partition, vp->Registers );
+	return hresult;
 }
 
 // Delete a virtual processor from the partition

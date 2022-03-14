@@ -25,9 +25,13 @@ HRESULT WHSEAPI WhSeAllocateGuestVirtualMemory( WHSE_PARTITION* Partition, PVOID
 //
 HRESULT WHSEAPI WhSeMapHostToGuestVirtualMemory( WHSE_PARTITION* Partition, PVOID HostVa, uintptr_t GuestVa, size_t Size, WHSE_MEMORY_ACCESS_FLAGS Flags );
 
-// Free memory in guest address space
+// Free memory in guest physical address space
 //
-HRESULT WHSEAPI WhSeFreeGuestMemory( WHSE_PARTITION* Partition, PVOID HostVa, uintptr_t GuestVa, size_t Size );
+HRESULT WHSEAPI WhSeFreeGuestPhysicalMemory( WHSE_PARTITION* Partition, PVOID HostVa, uintptr_t GuestPa, size_t Size );
+
+// Free memory in guest virtual address space
+//
+HRESULT WHSEAPI WhSeFreeGuestVirtualMemory( WHSE_PARTITION* Partition, PVOID HostVa, uintptr_t GuestVa, size_t Size );
 
 // Initialize paging and other stuff for the partition
 //

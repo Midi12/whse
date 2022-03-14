@@ -1,4 +1,5 @@
 #include "WinHvPartition.hpp"
+#include "WinHvAllocationTracker.hpp"
 
 // Create an hypervisor partition
 //
@@ -43,11 +44,18 @@ HRESULT WhSeCreatePartition( WHSE_PARTITION** Partition ) {
 		if ( partitionHandle ) {
 			::WHvDeletePartition( partitionHandle );
 		}
+
+		return hresult;
 	}
 	else {
 		// Set the handle
 		//
 		( *Partition )->Handle = partitionHandle;
+
+		// Initialize partition
+		//
+		// Todo : Create WhSiInitializePartition
+		hresult = WhSeInitializeAllocationTracker( *Partition );
 	}
 
 	return hresult;
@@ -68,13 +76,16 @@ HRESULT WhSeDeletePartition( WHSE_PARTITION** Partition ) {
 
 	auto partition = *Partition;
 
-	// Free the partition
+	// Cleanup and free the partition
 	//
 	if ( partition->Handle ) {
-		hresult = ::WHvDeletePartition( partition->Handle );
-		if ( FAILED( hresult ) ) {
+		hresult = WhSeFreeAllocationTracker( partition );
+		if ( FAILED( hresult ) )
 			return hresult;
-		}
+
+		hresult = ::WHvDeletePartition( partition->Handle );
+		if ( FAILED( hresult ) )
+			return hresult;
 
 		partition->Handle = nullptr;
 	}

@@ -20,16 +20,20 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="dllmain.cpp" />
+    <ClCompile Include="WinHvAllocationTracker.cpp" />
     <ClCompile Include="WinHvCallbacks.cpp" />
     <ClCompile Include="WinHvHelpers.cpp" />
     <ClCompile Include="WinHvMemory.cpp" />
     <ClCompile Include="WinHvMemoryInternal.cpp" />
+    <ClCompile Include="WinHvMemoryPrivate.cpp" />
     <ClCompile Include="WinHvPartition.cpp" />
     <ClCompile Include="WinHvProcessor.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="WinHvAllocationTracker.hpp" />
     <ClInclude Include="WinHvCallbacks.hpp" />
     <ClInclude Include="WinHvMemoryInternal.hpp" />
+    <ClInclude Include="WinHvMemoryPrivate.hpp" />
     <ClInclude Include="WinHvUtils.hpp" />
     <ClInclude Include="WinHvDefs.hpp" />
     <ClInclude Include="WinHvEmulator.hpp" />

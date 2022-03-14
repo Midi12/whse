@@ -1,9 +1,12 @@
 [x] Current code polish pass
 [x] Callback system to handle vm exits
 [x] Correct typedefs (MS style) to suppress warnings
-[ ] Private api in their own file
+[x] Private api in their own file
+[x] Tracker api in their own file
+[ ] New shellcode for debug -> test all callbacks
+[ ] Check all code path for clean memory handling
 [ ] Benchmarks
-	[  ] Find C (or a C++ with C style interface) Benchmark library
+	[ ] Find C (or a C++ with C style interface) Benchmark library
 [ ] Documentation
 	[ ] Find a documentation support
 [ ] Unit tests

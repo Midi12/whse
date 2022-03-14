@@ -4,6 +4,7 @@
 #include "WinHvProcessor.hpp"
 #include "WinHvUtils.hpp"
 #include "winbase.h"
+#include "WinHvAllocationTracker.hpp"
 
 constexpr uint32_t AccessFlagsToProtectionFlags( WHSE_MEMORY_ACCESS_FLAGS flags ) {
 	uint32_t protectionFlags = 0;
@@ -44,6 +45,8 @@ HRESULT WhSeAllocateGuestPhysicalMemory( WHSE_PARTITION* Partition, PVOID* HostV
 	if ( allocatedHostVa == nullptr )
 		return WhSeGetLastHresult();
 
+	// Create the allocated range into the guest physical address space
+	//
 	auto hresult = ::WHvMapGpaRange( Partition->Handle, allocatedHostVa, static_cast< WHV_GUEST_PHYSICAL_ADDRESS >( GuestPa ), size, Flags );
 	if ( FAILED( hresult ) ) {
 		if ( allocatedHostVa != nullptr )
@@ -52,11 +55,19 @@ HRESULT WhSeAllocateGuestPhysicalMemory( WHSE_PARTITION* Partition, PVOID* HostV
 		return hresult;
 	}
 
+	WHSE_ALLOCATION_NODE node {
+		.GuestPhysicalAddress = GuestPa,
+		.HostVirtualAddress = allocatedHostVa,
+		.Size = size
+	};
+
+	hresult = WhSeInsertAllocationTrackingNode( Partition, node );
+	if ( FAILED( hresult ) )
+		return hresult;
+
 	*HostVa = allocatedHostVa;
 	*Size = size;
 
-	// Create the allocated range into the guest physical address space
-	//
 	return hresult;
 }
 
@@ -123,6 +134,17 @@ HRESULT WhSeAllocateGuestVirtualMemory( WHSE_PARTITION* Partition, PVOID* HostVa
 		return hresult;
 	}
 
+	WHSE_ALLOCATION_NODE node {
+		.GuestVirtualAddress = reinterpret_cast< PVOID >( GuestVa ),
+		.GuestPhysicalAddress = gpa,
+		.HostVirtualAddress = allocatedHostVa,
+		.Size = size
+	};
+
+	hresult = WhSeInsertAllocationTrackingNode( Partition, node );
+	if ( FAILED( hresult ) )
+		return hresult;
+
 	*HostVa = allocatedHostVa;
 	*Size = size;
 
@@ -161,9 +183,9 @@ HRESULT WHSEAPI WhSeMapHostToGuestVirtualMemory( WHSE_PARTITION* Partition, PVOI
 	return ::WHvMapGpaRange( Partition->Handle, HostVa, static_cast< WHV_GUEST_PHYSICAL_ADDRESS >( gpa ), ALIGN_PAGE_SIZE( Size ), Flags );
 }
 
-// Free memory in guest address space
+// Free memory in guest physical address space
 //
-HRESULT WhSeFreeGuestMemory( WHSE_PARTITION* Partition, PVOID HostVa, uintptr_t GuestVa, size_t Size ) {
+HRESULT WHSEAPI WhSeFreeGuestPhysicalMemory( WHSE_PARTITION* Partition, PVOID HostVa, uintptr_t GuestPa, size_t Size ) {
 	if ( Partition == nullptr )
 		return HRESULT_FROM_WIN32( ERROR_INVALID_PARAMETER );
 
@@ -172,7 +194,34 @@ HRESULT WhSeFreeGuestMemory( WHSE_PARTITION* Partition, PVOID HostVa, uintptr_t 
 
 	auto size = ALIGN_PAGE_SIZE( Size );
 
-	auto hresult = ::WHvUnmapGpaRange( Partition->Handle, static_cast< WHV_GUEST_PHYSICAL_ADDRESS >( GuestVa ), size );
+	auto hresult = ::WHvUnmapGpaRange( Partition->Handle, static_cast< WHV_GUEST_PHYSICAL_ADDRESS >( GuestPa ), size );
+	if ( FAILED( hresult ) )
+		return hresult;
+
+	auto result = ::VirtualFree( HostVa, 0, MEM_RELEASE );
+	if ( !result )
+		return WhSeGetLastHresult();
+
+	return hresult;
+}
+
+// Free memory in guest virtual address space
+//
+HRESULT WHSEAPI WhSeFreeGuestVirtualMemory( WHSE_PARTITION* Partition, PVOID HostVa, uintptr_t GuestVa, size_t Size ) {
+	if ( Partition == nullptr )
+		return HRESULT_FROM_WIN32( ERROR_INVALID_PARAMETER );
+
+	if ( HostVa == nullptr )
+		return HRESULT_FROM_WIN32( ERROR_INVALID_PARAMETER );
+
+	auto size = ALIGN_PAGE_SIZE( Size );
+
+	uintptr_t gpa { };
+	auto hresult = WhSeTranslateGvaToGpa( Partition, GuestVa, &gpa, nullptr );
+	if ( FAILED( hresult ) )
+		return hresult;
+
+	hresult = ::WHvUnmapGpaRange( Partition->Handle, static_cast< WHV_GUEST_PHYSICAL_ADDRESS >( gpa ), size );
 	if ( FAILED( hresult ) )
 		return hresult;
 

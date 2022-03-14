@@ -7,6 +7,7 @@
 
 #include <cstdint>
 #include <windows.h>
+#include "WinHvMemoryPrivate.hpp"
 
 
 HRESULT WhSiDecomposeVirtualAddress( uintptr_t VirtualAddress, uint16_t* Pml4Index, uint16_t* PdpIndex, uint16_t* PdIndex, uint16_t* PtIndex, uint16_t* Offset ) {
@@ -20,7 +21,7 @@ HRESULT WhSiDecomposeVirtualAddress( uintptr_t VirtualAddress, uint16_t* Pml4Ind
 	return S_OK;
 }
 
-static uintptr_t s_nextPhysicalAddress = 0x00000000'00000000;
+static uintptr_t s_nextPhysicalAddress = 0x00000000'00000000 + PAGE_SIZE;
 
 // Get one or more physical page
 //
@@ -71,39 +72,6 @@ HRESULT WhSiAllocateGuestPhysicalMemory( WHSE_PARTITION* Partition, PVOID* HostV
 	return S_OK;
 }
 
-HRESULT WhSpInsertPageTableEntry( WHSE_PARTITION* Partition, PMMPTE_HARDWARE ParentLayer, uint16_t Index ) {
-	uintptr_t gpa = 0;
-	PVOID hva = nullptr;
-	size_t size = PAGE_SIZE;
-
-	auto hresult = WhSiAllocateGuestPhysicalMemory( Partition, &hva, &gpa, &size, WHvMapGpaRangeFlagRead | WHvMapGpaRangeFlagWrite );
-	if ( FAILED( hresult ) )
-		return hresult;
-
-	// Create a valid PTE
-	//
-	MMPTE_HARDWARE pte { };
-
-	pte.AsUlonglong = 0;							// Ensure zeroed
-	pte.Valid = 1;									// Intel's Present bit
-	pte.Write = 1;									// Intel's Read/Write bit
-	pte.Owner = 1;									// Intel's User/Supervisor bit, let's say it is a user accessible frame
-	pte.PageFrameNumber = ( gpa / PAGE_SIZE );		// Physical address of PDP page
-
-	ParentLayer[ Index ] = pte;
-
-	WHSE_ALLOCATION_NODE* node = reinterpret_cast< WHSE_ALLOCATION_NODE* >( ::HeapAlloc( ::GetProcessHeap(), HEAP_ZERO_MEMORY, sizeof( decltype( *node ) ) ) );
-	if ( node == nullptr )
-		return HRESULT_FROM_WIN32( ERROR_OUTOFMEMORY );
-
-	node->GuestPhysicalAddress = gpa;
-	node->HostVirtualAddress = hva;
-
-	::InterlockedPushEntrySList( Partition->MemoryLayout.AllocationTracker, node );
-
-	return hresult;
-}
-
 // Internal function to setup paging
 //
 HRESULT WhSiSetupPaging( WHSE_PARTITION* Partition, uintptr_t* Pml4PhysicalAddress ) {
@@ -112,15 +80,6 @@ HRESULT WhSiSetupPaging( WHSE_PARTITION* Partition, uintptr_t* Pml4PhysicalAddre
 	if ( Partition->MemoryLayout.Pml4HostVa != nullptr )
 		return HRESULT_FROM_WIN32( ERROR_ALREADY_INITIALIZED );
 
-	// Initialize Guest Virtual Address Space allocations tracking
-	//
-	PSLIST_HEADER tracker = reinterpret_cast< PSLIST_HEADER >( ::HeapAlloc( ::GetProcessHeap(), HEAP_ZERO_MEMORY, sizeof( decltype( *tracker ) ) ) );
-	if ( tracker == nullptr )
-		return HRESULT_FROM_WIN32( ERROR_OUTOFMEMORY );
-
-	::InitializeSListHead( tracker );
-	Partition->MemoryLayout.AllocationTracker = tracker;
-	
 	// Allocate PML4 on physical memory
 	//
 	uintptr_t pml4Gpa = 0;
@@ -146,24 +105,6 @@ HRESULT WhSiSetupPaging( WHSE_PARTITION* Partition, uintptr_t* Pml4PhysicalAddre
 	*Pml4PhysicalAddress = pml4Gpa;
 	
 	return hresult;
-}
-
-HRESULT WhSpLookupHVAFromPFN( WHSE_PARTITION* Partition, uintptr_t PageFrameNumber, PVOID* HostVa ) {
-	auto first = reinterpret_cast< WHSE_ALLOCATION_NODE* >( ::RtlFirstEntrySList( Partition->MemoryLayout.AllocationTracker ) );
-	if ( first == nullptr )
-		return HRESULT_FROM_WIN32( ERROR_NO_MORE_ITEMS );
-
-	auto current = first;
-	while ( current != nullptr ) {
-		if ( current->GuestPhysicalAddress == ( PageFrameNumber * PAGE_SIZE ) ) {
-			*HostVa = current->HostVirtualAddress;
-			break;
-		}
-
-		current = reinterpret_cast< WHSE_ALLOCATION_NODE* >( current->Next );
-	}
-
-	return S_OK;
 }
 
 // Internal function to insert page table in the paging directory
