@@ -122,12 +122,42 @@ constexpr size_t ALIGN_PAGE_SIZE( size_t x ) {
 
 bool OnMemoryAccessExit( _WHSE_PARTITION* Partition, WHV_VP_EXIT_CONTEXT* VpContext, WHSE_MEMORY_ACCESS_CONTEXT* ExitContext ) {
 	printf( "HandleMemoryAccessExit" );
-	return false;
+
+	// Fix the VA
+	//
+	uintptr_t hva { };
+	auto hresult = WhSeAllocateGuestVirtualMemory( Partition, &hva, ExitContext->Gva, PAGE_SIZE, WHvMapGpaRangeFlagRead | WHvMapGpaRangeFlagWrite );
+	if ( FAILED( hresult ) )
+		return false;
+
+	// Ask to retry the current instruction
+	//
+	return true;
 }
 
 bool OnIoPortAccessExit( _WHSE_PARTITION* Partition, WHV_VP_EXIT_CONTEXT* VpContext, WHSE_IO_PORT_ACCESS_CONTEXT* ExitContext ) {
 	printf( "IoPortAccessCallback" );
-	return false;
+
+	// Get a pointer to registers
+	//
+	auto registers = Partition->VirtualProcessor.Registers;
+
+	// Check which instruction is currently executed
+	// ( Tested instruction are 1 byte sized )
+	//
+	auto opcode = ExitContext->InstructionBytes[ 0 ];
+	if ( opcode == 0xEC ) {
+		// EC	IN AL,DX	Input byte from I/O port in DX into AL.
+		//
+		registers[ Rax ] = static_cast< uint8_t >( 0x12 );
+	} else if ( opcode == 0xEE ) {
+		// EE	OUT DX, AL	Output byte in AL to I/O port address in DX.
+		//
+		registers[ Rax ] = static_cast< uint8_t >( 0x1337 );
+	} else
+		return false;
+
+	return true;
 }
 
 bool OnUnrecoverableExceptionExit( _WHSE_PARTITION* Partition, WHV_VP_EXIT_CONTEXT* VpContext, WHSE_UNRECOVERABLE_EXCEPTION_CONTEXT* ExitContext ) {
