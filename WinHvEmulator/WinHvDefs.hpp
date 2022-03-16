@@ -14,6 +14,12 @@
 #error "Unsupported Operating System"
 #endif
 
+/** @file
+ * @brief This file expose the structure used in the library
+ *
+ */
+
+
 typedef WHV_MAP_GPA_RANGE_FLAGS WHSE_MEMORY_ACCESS_FLAGS;
 
 typedef WHV_REGISTER_NAME WHSE_REGISTER_NAME;
@@ -22,6 +28,9 @@ typedef WHV_REGISTER_VALUE WHSE_REGISTER_VALUE;
 typedef WHV_RUN_VP_EXIT_CONTEXT WHSE_VP_EXIT_CONTEXT;
 typedef WHV_RUN_VP_EXIT_REASON WHSE_VP_EXIT_REASON;
 
+/**
+ * @brief Enumeration to represent registers
+ */
 enum WHSE_REGISTER : uint8_t {
 	Rax,	Rbx,	Rcx,	Rdx,
 	Rbp,	Rsp,
@@ -80,12 +89,31 @@ static constexpr uint32_t g_registers_count = RTL_NUMBER_OF( g_registers );
 
 using WHSE_REGISTERS = WHSE_REGISTER_VALUE[ g_registers_count ];
 
+/**
+ * @brief A structure representing a virtual processor
+ *
+ * This structure represent a virtual processor, its index (number),
+ * the exit context upon a virtual processor exit and its registers state
+ */
 typedef struct _WHSE_VIRTUAL_PROCESSOR {
 	uint32_t Index;
 	WHSE_VP_EXIT_CONTEXT ExitContext;
 	WHSE_REGISTERS Registers;
 } WHSE_VIRTUAL_PROCESSOR, * PWHSE_VIRTUAL_PROCESSOR;
 
+/**
+ * @brief A structure to represent a guest memory allocation
+ *
+ * This structure a guest memory allocation.
+ * In case of physical memory allocation, the <GuestVirtualAddress> field is set to null and
+ * the <GuestPhysicalAddress> field is set with the guest physical memory address.
+ * In case of virtual memory allocation, the <GuestVirtualAddress> field is set to the
+ * guest address space virtual address and the <GuestPhysicalAddress> field is set with
+ * the guest physical memory address backing this virtual address.
+ * In either case the <HostVirtualAddress> is set to the host address space virtual address
+ * that is backing the allocated guest physical address space. The <Size> field must be set
+ * to the size that represent the allocated memory ranges (and must be non zero).
+ */
 typedef struct _WHSE_ALLOCATION_NODE : SLIST_ENTRY {
 	PVOID GuestVirtualAddress;
 	uintptr_t GuestPhysicalAddress;
@@ -93,24 +121,39 @@ typedef struct _WHSE_ALLOCATION_NODE : SLIST_ENTRY {
 	size_t Size;
 } WHSE_ALLOCATION_NODE, * PWHSE_ALLOCATION_NODE;
 
+/**
+ * @brief A structure to represent the boundaries of address space
+ */
 typedef struct _WHSE_ADDRESS_SPACE_BOUNDARY {
 	uintptr_t LowestAddress;
 	uintptr_t HighestAddress;
 	size_t SizeInBytes;
 } WHSE_ADDRESS_SPACE_BOUNDARY, * PWHSE_ADDRESS_SPACE_BOUNDARY;
 
+/**
+ * @brief A structure to store the memory layout
+ *
+ * The structure holds the physical memory and virtual memory boundaries.
+ * The structure holds a list of host memory allocations backing the physical guest memory.
+ * Paging directories guest physical address and host address is available throught <Pml4PhysicalAddress>
+ * and <Pml4HostVa> properties.
+ */
 typedef struct _WHSE_MEMORY_LAYOUT_DESC {
 	WHSE_ADDRESS_SPACE_BOUNDARY PhysicalAddressSpace;
+	WHSE_ADDRESS_SPACE_BOUNDARY VirtualAddressSpace;
 	uintptr_t Pml4PhysicalAddress;
 	PVOID Pml4HostVa;
 	PSLIST_HEADER AllocationTracker;
-	WHSE_ADDRESS_SPACE_BOUNDARY VirtualAddressSpace;
 } WHSE_MEMORY_LAYOUT_DESC, * PWHSE_MEMORY_LAYOUT_DESC;
 
 typedef WHV_PARTITION_HANDLE WHSE_PARTITION_HANDLE;
 
+/**
+ * @brief Enumeration to represent the virtual processor exits callbacks
+ */
 enum WHSE_EXIT_CALLBACK_SLOT : uint8_t {
 	// Standard exits caused by operations of the virtual processor
+	//
 	MemoryAccess,
 	IoPortAccess,
 	UnrecoverableException,
@@ -121,12 +164,14 @@ enum WHSE_EXIT_CALLBACK_SLOT : uint8_t {
 	ApicEoi,
 
 	// Additional exits that can be configured through partition properties
+	//
 	MsrAccess,
 	Cpuid,
 	Exception,
 	Rdtsc,
 
 	// Exits caused by the host
+	//
 	UserCanceled,
 
 	NumberOfCallbacks
@@ -178,6 +223,9 @@ typedef WHSE_CALLBACK_RETURNTYPE ( WHSECALLBACKAPI WHSE_EXIT_RDTSC_ACCESS_CALLBA
 typedef WHV_RUN_VP_CANCELED_CONTEXT WHSE_USER_CANCELED_CONTEXT;
 typedef WHSE_CALLBACK_RETURNTYPE ( WHSECALLBACKAPI WHSE_EXIT_USER_CANCELED_CALLBACK )( _WHSE_PARTITION* Partition, WHV_VP_EXIT_CONTEXT* VpContext, WHSE_USER_CANCELED_CONTEXT* Context );
 
+/**
+ * @brief A structure to hold pointers to the virtual processor exits callbacks
+ */
 typedef union _WHSE_EXIT_CALLBACKS {
 	struct {
 		WHSE_EXIT_MEMORYACCESS_CALLBACK				MemoryAccessCallback;
@@ -202,6 +250,16 @@ static_assert( sizeof( WHSE_EXIT_CALLBACKS::u ) == sizeof( uintptr_t ) * ( WHSE_
 static_assert( sizeof( WHSE_EXIT_CALLBACKS::Callbacks ) == sizeof( uintptr_t ) * ( WHSE_EXIT_CALLBACK_SLOT::NumberOfCallbacks ), "WHSE_EXIT_CALLBACKS::Callbacks size" );
 static_assert( sizeof( WHSE_EXIT_CALLBACKS::Callbacks ) == sizeof( WHSE_EXIT_CALLBACKS::u ), "Wrong WHSE_EXIT_CALLBACKS::Callbacks or WHSE_EXIT_CALLBACKS::u size" );
 
+/**
+ * @brief A structure to represent a partition
+ *
+ * A partition is the highest level structure and holds everything needed
+ * to run code on a virtual processor.
+ * The <Handle> property is an opaque pointer to a <WHV_PARTITION> structure.
+ * The <MemoryLayout> holds the properties of the memory layout.
+ * The <VirtualProcessor> holds the properties of a virtual processor.
+ * The <ExitCallbacks> hold an array of pointers to the virtual processor exits callbacks.
+ */
 typedef struct _WHSE_PARTITION {
 	WHSE_PARTITION_HANDLE Handle;
 	WHSE_MEMORY_LAYOUT_DESC MemoryLayout;
