@@ -1,8 +1,13 @@
 #include "WinHvAllocationTracker.hpp"
 #include "WinHvMemory.hpp"
 
-// Initialize allocation tracker structures
-//
+
+/**
+ * @brief Initialize allocation tracker structures
+ *
+ * @param Partition The VM partition
+ * @return A result code
+ */
 HRESULT WhSeInitializeAllocationTracker( WHSE_PARTITION* Partition ) {
 	if ( Partition == nullptr )
 		return HRESULT_FROM_WIN32( PEERDIST_ERROR_NOT_INITIALIZED );
@@ -19,8 +24,12 @@ HRESULT WhSeInitializeAllocationTracker( WHSE_PARTITION* Partition ) {
 	return S_OK;
 }
 
-// Free allocation tracker structures
-//
+/**
+ * @brief Free allocation tracker structures
+ *
+ * @param Partition The VM partition
+ * @return A result code
+ */
 HRESULT WhSeFreeAllocationTracker( WHSE_PARTITION* Partition ) {
 	if ( Partition == nullptr )
 		return HRESULT_FROM_WIN32( ERROR_INVALID_PARAMETER );
@@ -53,8 +62,14 @@ HRESULT WhSeFreeAllocationTracker( WHSE_PARTITION* Partition ) {
 	return S_OK;
 }
 
-// Find the first allocation node matching the predicate
-//
+/**
+ * @brief Find the first allocation node matching the predicate
+ *
+ * @param Partition The VM partition
+ * @param Predicate The predicate to match
+ * @param Node The node to be returned
+ * @return A result code
+ */
 HRESULT WhSeFindAllocationNode( WHSE_PARTITION* Partition, WHSE_ALLOCATION_TRACKER_PREDICATE Predicate, WHSE_ALLOCATION_NODE** Node ) {
 	if ( Partition == nullptr )
 		return HRESULT_FROM_WIN32( ERROR_INVALID_PARAMETER );
@@ -88,8 +103,14 @@ HRESULT WhSeFindAllocationNode( WHSE_PARTITION* Partition, WHSE_ALLOCATION_TRACK
 	return HRESULT_FROM_WIN32( *Node != nullptr ? S_OK : ERROR_NOT_FOUND );
 }
 
-// Find the first allocation node matching the guest virtual address
-//
+/**
+ * @brief Find the first allocation node matching the guest virtual address
+ *
+ * @param Partition The VM partition
+ * @param GuestVa The guest virtual address to match
+ * @param Node The node to be returned
+ * @return A result code
+ */
 HRESULT WhSeFindAllocationNodeByGva( WHSE_PARTITION* Partition, uintptr_t GuestVa, WHSE_ALLOCATION_NODE** Node ) {
 	if ( Partition == nullptr )
 		return HRESULT_FROM_WIN32( ERROR_INVALID_PARAMETER );
@@ -123,8 +144,14 @@ HRESULT WhSeFindAllocationNodeByGva( WHSE_PARTITION* Partition, uintptr_t GuestV
 	return HRESULT_FROM_WIN32( *Node != nullptr ? S_OK : ERROR_NOT_FOUND );
 }
 
-// Find the first allocation node matching the guest physical address
-//
+/**
+ * @brief Find the first allocation node matching the guest physical address
+ *
+ * @param Partition The VM partition
+ * @param GuestPa The guest physical address to match
+ * @param Node The node to be returned
+ * @return A result code
+ */
 HRESULT WhSeFindAllocationNodeByGpa( WHSE_PARTITION* Partition, uintptr_t GuestPa, WHSE_ALLOCATION_NODE** Node ) {
 	if ( Partition == nullptr )
 		return HRESULT_FROM_WIN32( ERROR_INVALID_PARAMETER );
@@ -158,8 +185,13 @@ HRESULT WhSeFindAllocationNodeByGpa( WHSE_PARTITION* Partition, uintptr_t GuestP
 	return HRESULT_FROM_WIN32( *Node != nullptr ? S_OK : ERROR_NOT_FOUND );
 }
 
-// Insert a tracking node
-//
+/**
+ * @brief Insert a tracking node
+ *
+ * @param Partition The VM partition
+ * @param Node The node to insert
+ * @return A result code
+ */
 HRESULT WHSEAPI WhSeInsertAllocationTrackingNode( WHSE_PARTITION* Partition, WHSE_ALLOCATION_NODE Node )
 {
 	WHSE_ALLOCATION_NODE* node = reinterpret_cast< WHSE_ALLOCATION_NODE* >( ::HeapAlloc( ::GetProcessHeap(), HEAP_ZERO_MEMORY, sizeof( decltype( *node ) ) ) );

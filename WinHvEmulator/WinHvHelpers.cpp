@@ -2,10 +2,15 @@
 
 #include <winhvplatform.h>
 
-//	Check if the hypervisor is available
-//	Must be called prior to any other calls
-//	To check for hypervisor presence
-//
+/**
+ * @brief Check if the hypervisor is available
+ *
+ * Check if the hypervisor is available
+ * Must be called prior to any other calls
+ * To check for hypervisor presence
+ *
+ * @return A boolean indicating if the hypervisor is present
+ */
 bool WhSeIsHypervisorPresent() {
 	auto capabilities = WHV_CAPABILITY { 0 };
 	uint32_t written = 0;
@@ -20,14 +25,20 @@ bool WhSeIsHypervisorPresent() {
 	return true;
 }
 
-// Wrapper around GetLastError
-//
+/**
+ * @brief Wrapper around GetLastError
+ *
+ * @return A code indicating the last error
+ */
 uint32_t WhSeGetLastError() {
 	return ::GetLastError();
 }
 
-// Wrapper around GetLastError and HRESULT_FROM_WIN32
-//
+/**
+ * @brief Wrapper around GetLastError and HRESULT_FROM_WIN32
+ *
+ * @return A code indicating the last error
+ */
 HRESULT WhSeGetLastHresult() {
 	auto lasterror = WhSeGetLastError();
 	return HRESULT_FROM_WIN32( lasterror );

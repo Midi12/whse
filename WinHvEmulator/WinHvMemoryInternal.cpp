@@ -60,7 +60,7 @@ HRESULT WhSiAllocateGuestPhysicalMemory( WHSE_PARTITION* Partition, PVOID* HostV
 		return hresult;
 
 	PVOID hostVa = nullptr;
-	size_t size = ALIGN_PAGE_SIZE( *Size );
+	size_t size = ALIGN_UP( *Size );
 	hresult = WhSeAllocateGuestPhysicalMemory( Partition, &hostVa, physicalAddress, &size, Flags );
 	if ( FAILED( hresult ) )
 		return hresult;
@@ -246,7 +246,7 @@ HRESULT WhSiFindBestGVA( WHSE_PARTITION* Partition, uintptr_t* GuestVa, size_t S
 	if ( current == nullptr )
 		return HRESULT_FROM_WIN32( ERROR_NO_MORE_ITEMS );
 
-	auto va = ALIGN_PAGE_SIZE( highestExistingGva + highestExistingGvaSize );
+	auto va = ALIGN_UP( highestExistingGva + highestExistingGvaSize );
 
 	*GuestVa = va;
 

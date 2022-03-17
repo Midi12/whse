@@ -6,26 +6,47 @@
 #include "winbase.h"
 #include "WinHvAllocationTracker.hpp"
 
-constexpr uint32_t AccessFlagsToProtectionFlags( WHSE_MEMORY_ACCESS_FLAGS flags ) {
+/**
+ * @brief A routine to translate a <WHSE_MEMORY_ACCESS_FLAGS>
+ *
+ * Internal routine
+ * A routine to translate a <WHSE_MEMORY_ACCESS_FLAGS> to a
+ * Protection Flags value compatible with the <VirtualAlloc> API
+ *
+ * @param Flags The VM partition
+ * @return A result code
+ */
+constexpr uint32_t AccessFlagsToProtectionFlags( WHSE_MEMORY_ACCESS_FLAGS Flags ) {
 	uint32_t protectionFlags = 0;
 
-	if ( flags == WHvMapGpaRangeFlagNone )
+	if ( Flags == WHvMapGpaRangeFlagNone )
 		return PAGE_NOACCESS;
 
-	if ( HAS_FLAGS( flags, WHvMapGpaRangeFlagRead ) )
+	if ( HAS_FLAGS( Flags, WHvMapGpaRangeFlagRead ) )
 		protectionFlags |= ( 1 << 1 );
 
-	if ( HAS_FLAGS( flags, WHvMapGpaRangeFlagWrite ) )
+	if ( HAS_FLAGS( Flags, WHvMapGpaRangeFlagWrite ) )
 		protectionFlags <<= 1;
 
-	if ( HAS_FLAGS( flags, WHvMapGpaRangeFlagExecute ) )
+	if ( HAS_FLAGS( Flags, WHvMapGpaRangeFlagExecute ) )
 		protectionFlags <<= 4;
 
 	return protectionFlags;
 }
 
-// Allocate memory in guest physical address space (backed by host memory)
-//
+/**
+ * @brief Allocate memory in guest physical address space (backed by host memory)
+ *
+ * Allocate memory in guest physical address space (backed by host memory), mapping twice
+ * on the same guest physical memory address will replace any existing mapping.
+ *
+ * @param Partition The VM partition
+ * @param HostVa The host virtual memory address backing the guest physical memory
+ * @param GuestPa The guest physical memory address
+ * @param Size The size of the allocated memory
+ * @param Flags The flags that describe the allocated memory (Read Write Execute)
+ * @return A result code
+ */
 HRESULT WhSeAllocateGuestPhysicalMemory( WHSE_PARTITION* Partition, PVOID* HostVa, uintptr_t GuestPa, size_t* Size, WHSE_MEMORY_ACCESS_FLAGS Flags ) {
 	if ( Partition == nullptr )
 		return HRESULT_FROM_WIN32( ERROR_INVALID_PARAMETER );
@@ -36,7 +57,7 @@ HRESULT WhSeAllocateGuestPhysicalMemory( WHSE_PARTITION* Partition, PVOID* HostV
 	if ( *HostVa != nullptr )
 		return HRESULT_FROM_WIN32( ERROR_INVALID_PARAMETER );
 
-	auto size = ALIGN_PAGE_SIZE( *Size );
+	auto size = ALIGN_UP( *Size );
 
 	// Allocate memory into host
 	//
@@ -73,6 +94,12 @@ HRESULT WhSeAllocateGuestPhysicalMemory( WHSE_PARTITION* Partition, PVOID* HostV
 
 // Map memory from host to guest physical address space (backed by host memory)
 //
+/**
+ * @brief 
+ *
+ * @param Partition The VM partition
+ * @return A result code
+ */
 HRESULT WHSEAPI WhSeMapHostToGuestPhysicalMemory( WHSE_PARTITION* Partition, PVOID HostVa, uintptr_t GuestPa, size_t Size, WHSE_MEMORY_ACCESS_FLAGS Flags ) {
 	if ( Partition == nullptr )
 		return HRESULT_FROM_WIN32( ERROR_INVALID_PARAMETER );
@@ -82,11 +109,17 @@ HRESULT WHSEAPI WhSeMapHostToGuestPhysicalMemory( WHSE_PARTITION* Partition, PVO
 
 	// Map the memory range into the guest physical address space
 	//
-	return ::WHvMapGpaRange( Partition->Handle, HostVa, static_cast< WHV_GUEST_PHYSICAL_ADDRESS >( GuestPa ), ALIGN_PAGE_SIZE( Size ), Flags );
+	return ::WHvMapGpaRange( Partition->Handle, HostVa, static_cast< WHV_GUEST_PHYSICAL_ADDRESS >( GuestPa ), ALIGN_UP( Size ), Flags );
 }
 
 // Allocate memory in guest virtual address space (backed by host memory)
 //
+/**
+ * @brief 
+ *
+ * @param Partition The VM partition
+ * @return A result code
+ */
 HRESULT WhSeAllocateGuestVirtualMemory( WHSE_PARTITION* Partition, PVOID* HostVa, uintptr_t GuestVa, size_t* Size, WHSE_MEMORY_ACCESS_FLAGS Flags ) {
 	if ( Partition == nullptr )
 		return HRESULT_FROM_WIN32( ERROR_INVALID_PARAMETER );
@@ -97,7 +130,7 @@ HRESULT WhSeAllocateGuestVirtualMemory( WHSE_PARTITION* Partition, PVOID* HostVa
 	if ( *HostVa != nullptr )
 		return HRESULT_FROM_WIN32( ERROR_INVALID_PARAMETER );
 
-	auto size = ALIGN_PAGE_SIZE( *Size );
+	auto size = ALIGN_UP( *Size );
 
 	// Allocate memory into host
 	//
@@ -110,8 +143,8 @@ HRESULT WhSeAllocateGuestVirtualMemory( WHSE_PARTITION* Partition, PVOID* HostVa
 
 	// Compute starting and ending guest virtual addresses
 	//
-	auto startingGva = ALIGN_PAGE( GuestVa );
-	auto endingGva = ALIGN_PAGE_SIZE( startingGva + size );
+	auto startingGva = ALIGN( GuestVa );
+	auto endingGva = ALIGN_UP( startingGva + size );
 
 	// Setup matching PTEs
 	//
@@ -153,6 +186,12 @@ HRESULT WhSeAllocateGuestVirtualMemory( WHSE_PARTITION* Partition, PVOID* HostVa
 
 // Map memory from host to guest virtual address space (backed by host memory)
 //
+/**
+ * @brief 
+ *
+ * @param Partition The VM partition
+ * @return A result code
+ */
 HRESULT WHSEAPI WhSeMapHostToGuestVirtualMemory( WHSE_PARTITION* Partition, PVOID HostVa, uintptr_t GuestVa, size_t Size, WHSE_MEMORY_ACCESS_FLAGS Flags ) {
 	if ( Partition == nullptr )
 		return HRESULT_FROM_WIN32( ERROR_INVALID_PARAMETER );
@@ -164,8 +203,8 @@ HRESULT WHSEAPI WhSeMapHostToGuestVirtualMemory( WHSE_PARTITION* Partition, PVOI
 
 	// Compute starting and ending guest virtual addresses
 	//
-	auto startingGva = ALIGN_PAGE( GuestVa );
-	auto endingGva = ALIGN_PAGE_SIZE( startingGva + Size );
+	auto startingGva = ALIGN( GuestVa );
+	auto endingGva = ALIGN_UP( startingGva + Size );
 
 	// Setup matching PTEs (and allocate guest physical memory accordingly)
 	//
@@ -180,11 +219,17 @@ HRESULT WHSEAPI WhSeMapHostToGuestVirtualMemory( WHSE_PARTITION* Partition, PVOI
 	if ( FAILED( hresult ) )
 		return hresult;
 
-	return ::WHvMapGpaRange( Partition->Handle, HostVa, static_cast< WHV_GUEST_PHYSICAL_ADDRESS >( gpa ), ALIGN_PAGE_SIZE( Size ), Flags );
+	return ::WHvMapGpaRange( Partition->Handle, HostVa, static_cast< WHV_GUEST_PHYSICAL_ADDRESS >( gpa ), ALIGN_UP( Size ), Flags );
 }
 
 // Free memory in guest physical address space
 //
+/**
+ * @brief 
+ *
+ * @param Partition The VM partition
+ * @return A result code
+ */
 HRESULT WHSEAPI WhSeFreeGuestPhysicalMemory( WHSE_PARTITION* Partition, PVOID HostVa, uintptr_t GuestPa, size_t Size ) {
 	if ( Partition == nullptr )
 		return HRESULT_FROM_WIN32( ERROR_INVALID_PARAMETER );
@@ -192,7 +237,7 @@ HRESULT WHSEAPI WhSeFreeGuestPhysicalMemory( WHSE_PARTITION* Partition, PVOID Ho
 	if ( HostVa == nullptr )
 		return HRESULT_FROM_WIN32( ERROR_INVALID_PARAMETER );
 
-	auto size = ALIGN_PAGE_SIZE( Size );
+	auto size = ALIGN_UP( Size );
 
 	auto hresult = ::WHvUnmapGpaRange( Partition->Handle, static_cast< WHV_GUEST_PHYSICAL_ADDRESS >( GuestPa ), size );
 	if ( FAILED( hresult ) )
@@ -207,6 +252,12 @@ HRESULT WHSEAPI WhSeFreeGuestPhysicalMemory( WHSE_PARTITION* Partition, PVOID Ho
 
 // Free memory in guest virtual address space
 //
+/**
+ * @brief 
+ *
+ * @param Partition The VM partition
+ * @return A result code
+ */
 HRESULT WHSEAPI WhSeFreeGuestVirtualMemory( WHSE_PARTITION* Partition, PVOID HostVa, uintptr_t GuestVa, size_t Size ) {
 	if ( Partition == nullptr )
 		return HRESULT_FROM_WIN32( ERROR_INVALID_PARAMETER );
@@ -214,7 +265,7 @@ HRESULT WHSEAPI WhSeFreeGuestVirtualMemory( WHSE_PARTITION* Partition, PVOID Hos
 	if ( HostVa == nullptr )
 		return HRESULT_FROM_WIN32( ERROR_INVALID_PARAMETER );
 
-	auto size = ALIGN_PAGE_SIZE( Size );
+	auto size = ALIGN_UP( Size );
 
 	uintptr_t gpa { };
 	auto hresult = WhSeTranslateGvaToGpa( Partition, GuestVa, &gpa, nullptr );
@@ -234,6 +285,12 @@ HRESULT WHSEAPI WhSeFreeGuestVirtualMemory( WHSE_PARTITION* Partition, PVOID Hos
 
 // Initialize paging and other memory stuff for the partition
 //
+/**
+ * @brief 
+ *
+ * @param Partition The VM partition
+ * @return A result code
+ */
 HRESULT WhSeInitializeMemoryLayout( WHSE_PARTITION* Partition ) {
 	// Get available physical memory
 	//
@@ -282,6 +339,12 @@ HRESULT WhSeInitializeMemoryLayout( WHSE_PARTITION* Partition ) {
 
 // Translate guest virtual address to guest physical address
 //
+/**
+ * @brief 
+ *
+ * @param Partition The VM partition
+ * @return A result code
+ */
 HRESULT WhSeTranslateGvaToGpa( WHSE_PARTITION* Partition, uintptr_t VirtualAddress, uintptr_t* PhysicalAddress, WHV_TRANSLATE_GVA_RESULT* TranslationResult ) {
 	if ( PhysicalAddress == nullptr )
 		return HRESULT_FROM_WIN32( ERROR_INVALID_PARAMETER );

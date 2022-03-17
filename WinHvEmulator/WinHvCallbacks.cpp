@@ -1,8 +1,14 @@
 #include "WinHvCallbacks.hpp"
 #include "winerror.h"
 
-// Register a callback for the given vm exit
-//
+/**
+ * @brief Register a callback for the given vm exit
+ *
+ * @param Partition The VM partition
+ * @param Slot The callback slot to register the callback to
+ * @param Callback The callback to register
+ * @return A result code
+ */
 HRESULT WhSeRegisterExitCallback( WHSE_PARTITION* Partition, WHSE_EXIT_CALLBACK_SLOT Slot, WHSE_CALLBACK Callback ) {
 	if ( Partition == nullptr )
 		return HRESULT_FROM_WIN32( ERROR_INVALID_PARAMETER );
@@ -18,8 +24,14 @@ HRESULT WhSeRegisterExitCallback( WHSE_PARTITION* Partition, WHSE_EXIT_CALLBACK_
 	return S_OK;
 }
 
-// Get the registered callback for the given vm exit
-//
+/**
+ * @brief Get the registered callback for the given vm exit
+ *
+ * @param Partition The VM partition
+ * @param Slot The callback slot to get
+ * @param Callback The pointer to the returned callback
+ * @return A result code
+ */
 HRESULT WhSeGetExitCallback( WHSE_PARTITION* Partition, WHSE_EXIT_CALLBACK_SLOT Slot, WHSE_CALLBACK* Callback ) {
 	if ( Partition == nullptr )
 		return HRESULT_FROM_WIN32( ERROR_INVALID_PARAMETER );
@@ -35,8 +47,13 @@ HRESULT WhSeGetExitCallback( WHSE_PARTITION* Partition, WHSE_EXIT_CALLBACK_SLOT 
 	return S_OK;
 }
 
-// Unegister a callback for the given vm exit
-//
+/**
+ * @brief Unegister a callback for the given vm exit
+ *
+ * @param Partition The VM partition
+ * @param Slot The callback slot to unregister
+ * @return A result code
+ */
 HRESULT WhSeUnregisterExitCallback( WHSE_PARTITION* Partition, WHSE_EXIT_CALLBACK_SLOT Slot ) {
 	if ( Partition == nullptr )
 		return HRESULT_FROM_WIN32( ERROR_INVALID_PARAMETER );
