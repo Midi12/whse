@@ -1,0 +1,59 @@
+kd> !idt
+
+Dumping IDT: fffff8071c450000
+
+00:	fffff80720611100 nt!KiDivideErrorFaultShadow
+01:	fffff80720611180 nt!KiDebugTrapOrFaultShadow	Stack = 0xFFFFF8071C4549D0
+02:	fffff80720611240 nt!KiNmiInterruptShadow	Stack = 0xFFFFF8071C4547D0
+03:	fffff807206112c0 nt!KiBreakpointTrapShadow
+04:	fffff80720611340 nt!KiOverflowTrapShadow
+05:	fffff807206113c0 nt!KiBoundFaultShadow
+06:	fffff80720611440 nt!KiInvalidOpcodeFaultShadow
+07:	fffff807206114c0 nt!KiNpxNotAvailableFaultShadow
+08:	fffff80720611540 nt!KiDoubleFaultAbortShadow	Stack = 0xFFFFF8071C4543D0
+09:	fffff807206115c0 nt!KiNpxSegmentOverrunAbortShadow
+0a:	fffff80720611640 nt!KiInvalidTssFaultShadow
+0b:	fffff807206116c0 nt!KiSegmentNotPresentFaultShadow
+0c:	fffff80720611740 nt!KiStackFaultShadow
+0d:	fffff807206117c0 nt!KiGeneralProtectionFaultShadow
+0e:	fffff80720611840 nt!KiPageFaultShadow
+10:	fffff807206118c0 nt!KiFloatingErrorFaultShadow
+11:	fffff80720611940 nt!KiAlignmentFaultShadow
+12:	fffff807206119c0 nt!KiMcheckAbortShadow	Stack = 0xFFFFF8071C4545D0
+13:	fffff80720611ac0 nt!KiXmmExceptionShadow
+14:	fffff80720611b40 nt!KiVirtualizationExceptionShadow
+15:	fffff80720611bc0 nt!KiControlProtectionFaultShadow
+1f:	fffff80720611c40 nt!KiApcInterruptShadow
+20:	fffff80720611cc0 nt!KiSwInterruptShadow
+29:	fffff80720611d40 nt!KiRaiseSecurityCheckFailureShadow
+2c:	fffff80720611dc0 nt!KiRaiseAssertionShadow
+2d:	fffff80720611e40 nt!KiDebugServiceTrapShadow
+2e:	fffff80720611ec0 nt!KiSystemServiceShadow
+2f:	fffff80720611f40 nt!KiDpcInterruptShadow
+30:	fffff80720611fc0 nt!KiHvInterruptShadow
+31:	fffff80720612040 nt!KiVmbusInterrupt0Shadow
+32:	fffff807206120c0 nt!KiVmbusInterrupt1Shadow
+33:	fffff80720612140 nt!KiVmbusInterrupt2Shadow
+34:	fffff807206121c0 nt!KiVmbusInterrupt3Shadow
+35:	fffff80720612468 nt!HalpInterruptCmciService (KINTERRUPT fffff807208f2fc0)
+
+36:	fffff80720612470 nt!HalpInterruptCmciService (KINTERRUPT fffff807208f3200)
+
+d1:	fffff80720612948 nt!HalpTimerClockInterruptStub (KINTERRUPT fffff807208f39e0)
+
+d2:	fffff80720612950 nt!HalpTimerClockIpiRoutine (KINTERRUPT fffff807208f38c0)
+
+d7:	fffff80720612978 nt!HalpInterruptRebootService (KINTERRUPT fffff807208f3680)
+
+d8:	fffff80720612980 nt!HalpInterruptStubService (KINTERRUPT fffff807208f3440)
+
+df:	fffff807206129b8 nt!HalpInterruptSpuriousService (KINTERRUPT fffff807208f3320)
+
+e1:	fffff80720612240 nt!KiIpiInterruptShadow
+e2:	fffff807206129d0 nt!HalpInterruptLocalErrorService (KINTERRUPT fffff807208f3560)
+
+e3:	fffff807206129d8 nt!HalpInterruptDeferredRecoveryService (KINTERRUPT fffff807208f30e0)
+
+fd:	fffff80720612aa8 nt!HalpTimerProfileInterrupt (KINTERRUPT fffff807208f3b00)
+
+fe:	fffff80720612ab0 nt!HalpPerfInterrupt (KINTERRUPT fffff807208f37a0)
