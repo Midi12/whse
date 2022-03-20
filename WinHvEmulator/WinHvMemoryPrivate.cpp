@@ -2,8 +2,14 @@
 #include "WinHvUtils.hpp"
 #include "WinHvAllocationTracker.hpp"
 
-// Private api
-//
+/**
+ * @brief Private api
+ *
+ * @param Partition The VM partition
+ * @param ParentLayer
+ * @param Index
+ * @return A result code
+ */
 HRESULT WhSpInsertPageTableEntry( WHSE_PARTITION* Partition, PMMPTE_HARDWARE ParentLayer, uint16_t Index ) {
 	uintptr_t gpa = 0;
 	PVOID hva = nullptr;
@@ -28,8 +34,14 @@ HRESULT WhSpInsertPageTableEntry( WHSE_PARTITION* Partition, PMMPTE_HARDWARE Par
 	return hresult;
 }
 
-// Private api
-//
+/**
+ * @brief Private api
+ *
+ * @param Partition The VM partition
+ * @param PageFrameNumber
+ * @param HostVa
+ * @return A result code
+ */
 HRESULT WhSpLookupHVAFromPFN( WHSE_PARTITION* Partition, uintptr_t PageFrameNumber, PVOID* HostVa ) {
 	WHSE_ALLOCATION_NODE* node = nullptr;
 	auto hresult = WhSeFindAllocationNodeByGpa( Partition, PageFrameNumber * PAGE_SIZE, &node );

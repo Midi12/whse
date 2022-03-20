@@ -13,8 +13,8 @@
  * A routine to translate a <WHSE_MEMORY_ACCESS_FLAGS> to a
  * Protection Flags value compatible with the <VirtualAlloc> API
  *
- * @param Flags The VM partition
- * @return A result code
+ * @param Flags The flags to translate
+ * @return The translated flags
  */
 constexpr uint32_t AccessFlagsToProtectionFlags( WHSE_MEMORY_ACCESS_FLAGS Flags ) {
 	uint32_t protectionFlags = 0;
@@ -38,7 +38,8 @@ constexpr uint32_t AccessFlagsToProtectionFlags( WHSE_MEMORY_ACCESS_FLAGS Flags 
  * @brief Allocate memory in guest physical address space (backed by host memory)
  *
  * Allocate memory in guest physical address space (backed by host memory), mapping twice
- * on the same guest physical memory address will replace any existing mapping.
+ * on the same guest physical memory address will replace any existing mapping but will not free
+ * the existing host backing memory.
  *
  * @param Partition The VM partition
  * @param HostVa The host virtual memory address backing the guest physical memory
@@ -92,12 +93,18 @@ HRESULT WhSeAllocateGuestPhysicalMemory( WHSE_PARTITION* Partition, PVOID* HostV
 	return hresult;
 }
 
-// Map memory from host to guest physical address space (backed by host memory)
-//
 /**
- * @brief 
+ * @brief Map memory from host to guest physical address space (backed by host memory)
  *
+ * Map host memory to guest physical memory, mapping twice
+ * on the same guest physical memory address will replace any existing mapping but will not free
+ * the existing host backing memory.
+ * 
  * @param Partition The VM partition
+ * @param HostVa The host virtual memory address backing the guest physical memory
+ * @param GuestPa The guest physical memory address
+ * @param Size The size of the allocated memory
+ * @param Flags The flags that describe the allocated memory (Read Write Execute)
  * @return A result code
  */
 HRESULT WHSEAPI WhSeMapHostToGuestPhysicalMemory( WHSE_PARTITION* Partition, PVOID HostVa, uintptr_t GuestPa, size_t Size, WHSE_MEMORY_ACCESS_FLAGS Flags ) {
@@ -112,12 +119,18 @@ HRESULT WHSEAPI WhSeMapHostToGuestPhysicalMemory( WHSE_PARTITION* Partition, PVO
 	return ::WHvMapGpaRange( Partition->Handle, HostVa, static_cast< WHV_GUEST_PHYSICAL_ADDRESS >( GuestPa ), ALIGN_UP( Size ), Flags );
 }
 
-// Allocate memory in guest virtual address space (backed by host memory)
-//
 /**
- * @brief 
+ * @brief Allocate memory in guest virtual address space (backed by host memory)
  *
+ * Allocate memory in guest virtual address space (backed by host memory), mapping twice
+ * on the same guest physical memory address will replace any existing physical memory mapping
+ * but will not free the host virtual memory nor update the guest PTEs.
+ * 
  * @param Partition The VM partition
+ * @param HostVa The host virtual memory address backing the guest physical memory
+ * @param GuestVa The guest virtual memory address
+ * @param Size The size of the allocated memory
+ * @param Flags The flags that describe the allocated memory (Read Write Execute)
  * @return A result code
  */
 HRESULT WhSeAllocateGuestVirtualMemory( WHSE_PARTITION* Partition, PVOID* HostVa, uintptr_t GuestVa, size_t* Size, WHSE_MEMORY_ACCESS_FLAGS Flags ) {
@@ -184,12 +197,18 @@ HRESULT WhSeAllocateGuestVirtualMemory( WHSE_PARTITION* Partition, PVOID* HostVa
 	return hresult;
 }
 
-// Map memory from host to guest virtual address space (backed by host memory)
-//
 /**
- * @brief 
+ * @brief Map memory from host to guest virtual address space (backed by host memory)
  *
+ * Map host memory to guest virtual memory, mapping twice
+ * on the same guest physical memory address will replace any existing physical memory mapping
+ * but will not free the host virtual memory nor update the guest PTEs.
+ * 
  * @param Partition The VM partition
+ * @param HostVa The host virtual memory address backing the guest physical memory
+ * @param GuestVa The guest virtual memory address
+ * @param Size The size of the allocated memory
+ * @param Flags The flags that describe the allocated memory (Read Write Execute)
  * @return A result code
  */
 HRESULT WHSEAPI WhSeMapHostToGuestVirtualMemory( WHSE_PARTITION* Partition, PVOID HostVa, uintptr_t GuestVa, size_t Size, WHSE_MEMORY_ACCESS_FLAGS Flags ) {
@@ -222,12 +241,13 @@ HRESULT WHSEAPI WhSeMapHostToGuestVirtualMemory( WHSE_PARTITION* Partition, PVOI
 	return ::WHvMapGpaRange( Partition->Handle, HostVa, static_cast< WHV_GUEST_PHYSICAL_ADDRESS >( gpa ), ALIGN_UP( Size ), Flags );
 }
 
-// Free memory in guest physical address space
-//
 /**
- * @brief 
+ * @brief Free memory in guest physical address space
  *
  * @param Partition The VM partition
+ * @param HostVa The host memory virtual address backing the physical guest memory
+ * @param GuestPa The guest memory physical address
+ * @param Size The size of the allocation
  * @return A result code
  */
 HRESULT WHSEAPI WhSeFreeGuestPhysicalMemory( WHSE_PARTITION* Partition, PVOID HostVa, uintptr_t GuestPa, size_t Size ) {
@@ -250,12 +270,13 @@ HRESULT WHSEAPI WhSeFreeGuestPhysicalMemory( WHSE_PARTITION* Partition, PVOID Ho
 	return hresult;
 }
 
-// Free memory in guest virtual address space
-//
 /**
- * @brief 
+ * @brief Free memory in guest virtual address space
  *
  * @param Partition The VM partition
+ * @param HostVa The host memory virtual address backing the physical guest memory
+ * @param GuestVa The guest memory virtual address
+ * @param Size The size of the allocation
  * @return A result code
  */
 HRESULT WHSEAPI WhSeFreeGuestVirtualMemory( WHSE_PARTITION* Partition, PVOID HostVa, uintptr_t GuestVa, size_t Size ) {
@@ -283,10 +304,8 @@ HRESULT WHSEAPI WhSeFreeGuestVirtualMemory( WHSE_PARTITION* Partition, PVOID Hos
 	return hresult;
 }
 
-// Initialize paging and other memory stuff for the partition
-//
 /**
- * @brief 
+ * @brief Initialize paging and other memory stuff for the partition
  *
  * @param Partition The VM partition
  * @return A result code
@@ -334,15 +353,28 @@ HRESULT WhSeInitializeMemoryLayout( WHSE_PARTITION* Partition ) {
 	//
 	registers[ Efer ].Reg64 = ( registers[ Efer ].Reg64 | ( 1ULL << 8 ) ) & ~( 1 << 16 );
 
+	// Update registers at this point
+	//
+	hresult = WhSeSetProcessorRegisters( Partition, registers );
+	if ( FAILED( hresult ) )
+		return hresult;
+
+	// Setup custom IDT
+	//
+	hresult = WhSiSetupInterruptDescriptorTable( Partition, registers );
+	if ( FAILED( hresult ) )
+		return hresult;
+
 	return WhSeSetProcessorRegisters( Partition, registers );
 }
 
-// Translate guest virtual address to guest physical address
-//
 /**
- * @brief 
+ * @brief Translate guest virtual address to guest physical address
  *
  * @param Partition The VM partition
+ * @param VirtualAddress The guest virtual address to be translated
+ * @param PhysicalAddress The guest physical address backing the guest virtual address
+ * @param TranslationResult The translation result
  * @return A result code
  */
 HRESULT WhSeTranslateGvaToGpa( WHSE_PARTITION* Partition, uintptr_t VirtualAddress, uintptr_t* PhysicalAddress, WHV_TRANSLATE_GVA_RESULT* TranslationResult ) {

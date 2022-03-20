@@ -9,7 +9,7 @@
 
 // Create a virtual processor in a partition
 //
-HRESULT WHSEAPI WhSeCreateProcessor( WHSE_PARTITION* Partition );
+HRESULT WHSEAPI WhSeCreateProcessor( WHSE_PARTITION* Partition, PROCESSOR_MODE Mode );
 
 // Set a virtual processor registers
 //

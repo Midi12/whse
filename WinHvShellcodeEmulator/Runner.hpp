@@ -7,17 +7,10 @@
 
 #include "../WinHvEmulator/WinHvEmulator.hpp"
 
-enum class PROCESSOR_MODE : uint8_t {
-	None,
-	KernelMode,
-	UserMode
-};
-
 typedef struct _RUN_PARAMS {
 	uintptr_t Entrypoint;
 	uintptr_t Stack;
 	WHSE_PARTITION* Partition;
-	PROCESSOR_MODE Mode;
 } RUN_PARAMS, * PRUN_PARAMS;
 
 typedef struct _RUN_OPTIONS {

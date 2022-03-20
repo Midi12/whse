@@ -28,6 +28,17 @@ typedef WHV_RUN_VP_EXIT_CONTEXT WHSE_VP_EXIT_CONTEXT;
 typedef WHV_RUN_VP_EXIT_REASON WHSE_VP_EXIT_REASON;
 
 /**
+ * @brief Enumeration describing the processor mode
+ */
+enum PROCESSOR_MODE : uint8_t {
+	None,
+	KernelMode,
+	UserMode,
+
+	NumberOfModes
+};
+
+/**
  * @brief Enumeration to represent registers
  */
 enum WHSE_REGISTER : uint8_t {
@@ -96,8 +107,9 @@ using WHSE_REGISTERS = WHSE_REGISTER_VALUE[ g_registers_count ];
  */
 typedef struct _WHSE_VIRTUAL_PROCESSOR {
 	uint32_t Index;
+	PROCESSOR_MODE Mode;
 	WHSE_VP_EXIT_CONTEXT ExitContext;
-	WHSE_REGISTERS Registers;
+	WHSE_REGISTERS Registers; // Must be last as it is an array
 } WHSE_VIRTUAL_PROCESSOR, * PWHSE_VIRTUAL_PROCESSOR;
 
 /**
@@ -143,6 +155,7 @@ typedef struct _WHSE_MEMORY_LAYOUT_DESC {
 	uintptr_t Pml4PhysicalAddress;
 	PVOID Pml4HostVa;
 	PSLIST_HEADER AllocationTracker;
+	uintptr_t InterruptDescriptorTableVirtualAddress;
 } WHSE_MEMORY_LAYOUT_DESC, * PWHSE_MEMORY_LAYOUT_DESC;
 
 typedef WHV_PARTITION_HANDLE WHSE_PARTITION_HANDLE;

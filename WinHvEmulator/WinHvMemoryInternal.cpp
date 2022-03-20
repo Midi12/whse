@@ -8,8 +8,19 @@
 #include <cstdint>
 #include <windows.h>
 #include "WinHvMemoryPrivate.hpp"
+#include "WinHvAllocationTracker.hpp"
 
-
+/**
+ * @brief Break down a virtual address to paging indexes
+ *
+ * @param VirtualAddress The virtual address
+ * @param Pml4Index The Page Map Level Four (PML4) index
+ * @param PdpIndex The Page Directory Pointers index
+ * @param PdIndex The Page Directory index
+ * @param PtIndex The Page Table index
+ * @param Offset The physical page offset
+ * @return A result code
+ */
 HRESULT WhSiDecomposeVirtualAddress( uintptr_t VirtualAddress, uint16_t* Pml4Index, uint16_t* PdpIndex, uint16_t* PdIndex, uint16_t* PtIndex, uint16_t* Offset ) {
 
 	*Offset = VirtualAddress & 0xFFF;
@@ -23,8 +34,14 @@ HRESULT WhSiDecomposeVirtualAddress( uintptr_t VirtualAddress, uint16_t* Pml4Ind
 
 static uintptr_t s_nextPhysicalAddress = 0x00000000'00000000 + PAGE_SIZE;
 
-// Get one or more physical page
-//
+/**
+ * @brief Get one or more physical page
+ *
+ * @param Partition The VM partition
+ * @param NumberOfPages The number of pages requested
+ * @param PhysicalPageAddress The returned guest physical address
+ * @return A result code
+ */
 HRESULT WhSiGetNextPhysicalPages( WHSE_PARTITION* Partition, size_t NumberOfPages, uintptr_t* PhysicalPageAddress ) {
 	if ( NumberOfPages <= 0 )
 		return HRESULT_FROM_WIN32( ERROR_INVALID_PARAMETER );
@@ -45,14 +62,27 @@ HRESULT WhSiGetNextPhysicalPages( WHSE_PARTITION* Partition, size_t NumberOfPage
 	return S_OK;
 }
 
-// Get one physical page
-//
+/**
+ * @brief Get one physical page
+ *
+ * @param Partition The VM partition
+ * @param PhysicalPageAddress The returned guest physical address
+ * @return A result code
+ */
 HRESULT WhSiGetNextPhysicalPage( WHSE_PARTITION* Partition, uintptr_t* PhysicalPageAddress ) {
 	return WhSiGetNextPhysicalPages( Partition, 1, PhysicalPageAddress );
 }
 
-// Internal helper to allocate host memory to guest physical memory
-//
+/**
+ * @brief Internal helper to allocate host memory to guest physical memory
+ *
+ * @param Partition The VM partition
+ * @param HostVa
+ * @param GuestPa
+ * @param Size
+ * @param Flags
+ * @return A result code
+ */
 HRESULT WhSiAllocateGuestPhysicalMemory( WHSE_PARTITION* Partition, PVOID* HostVa, uintptr_t* GuestPa, size_t* Size, WHSE_MEMORY_ACCESS_FLAGS Flags ) {
 	uintptr_t physicalAddress = 0;
 	auto hresult = WhSiGetNextPhysicalPage( Partition, &physicalAddress );
@@ -72,8 +102,13 @@ HRESULT WhSiAllocateGuestPhysicalMemory( WHSE_PARTITION* Partition, PVOID* HostV
 	return S_OK;
 }
 
-// Internal function to setup paging
-//
+/**
+ * @brief Internal function to setup paging
+ *
+ * @param Partition The VM partition
+ * @param Pml4PhysicalAddress
+ * @return A result code
+ */
 HRESULT WhSiSetupPaging( WHSE_PARTITION* Partition, uintptr_t* Pml4PhysicalAddress ) {
 	// Check if already initialized
 	//
@@ -107,9 +142,16 @@ HRESULT WhSiSetupPaging( WHSE_PARTITION* Partition, uintptr_t* Pml4PhysicalAddre
 	return hresult;
 }
 
-// Internal function to insert page table in the paging directory
-// Allocate PML4 entry, PDP entry, PD entry and PT entry
-//
+/**
+ * @brief Internal function to insert page table in the paging directory
+ * 
+ * Internal function to insert page table in the paging directory
+ * Allocate PML4 entry, PDP entry, PD entry and PT entry
+ *
+ * @param Partition The VM partition
+ * @param VirtualAddress
+ * @return A result code
+ */
 HRESULT WhSiInsertPageTableEntry( WHSE_PARTITION* Partition, uintptr_t VirtualAddress ) {
 	// "Explode" the VA into translation indexes
 	//
@@ -214,8 +256,14 @@ HRESULT WhSiInsertPageTableEntry( WHSE_PARTITION* Partition, uintptr_t VirtualAd
 	return S_OK;
 }
 
-// Find a suitable Guest VA
-//
+/**
+ * @brief Find a suitable Guest VA
+ *
+ * @param Partition The VM partition
+ * @param GuestVa
+ * @param Size
+ * @return A result code
+ */
 HRESULT WhSiFindBestGVA( WHSE_PARTITION* Partition, uintptr_t* GuestVa, size_t Size ) {
 	if ( Partition == nullptr )
 		return HRESULT_FROM_WIN32( ERROR_INVALID_PARAMETER );
@@ -249,6 +297,81 @@ HRESULT WhSiFindBestGVA( WHSE_PARTITION* Partition, uintptr_t* GuestVa, size_t S
 	auto va = ALIGN_UP( highestExistingGva + highestExistingGvaSize );
 
 	*GuestVa = va;
+
+	return S_OK;
+}
+
+constexpr uint8_t MAKE_IDT_ATTRS( uint8_t Dpl, uint8_t GateType ) {
+	return (
+		( 1 << 7 )					// Present bit
+		| ( ( Dpl << 6 ) & 0b11 )
+		| ( 0 << 4 )				// Reserved bit
+		| ( GateType & 0b1111 )
+	);
+}
+
+/**
+ * @brief Setup IDT
+ *
+ * @param Partition The VM partition
+ * @param Registers
+ * @return A result code
+ */
+HRESULT WhSiSetupInterruptDescriptorTable( WHSE_PARTITION* Partition, WHSE_REGISTERS Registers ) {
+	if ( Partition == nullptr )
+		return HRESULT_FROM_WIN32( ERROR_INVALID_PARAMETER );
+
+	if ( Registers == nullptr )
+		return HRESULT_FROM_WIN32( ERROR_INVALID_PARAMETER );
+
+	// Allocate two pages, one for the IDT
+	//
+	PVOID idtHva = nullptr;
+	uintptr_t idtGva = 0xffff8000'00000000; // start of system space
+	size_t size = PAGE_SIZE;
+	auto hresult = WhSeAllocateGuestVirtualMemory( Partition, &idtHva, idtGva, &size, WHvMapGpaRangeFlagRead | WHvMapGpaRangeFlagWrite );
+	if ( FAILED( hresult ) )
+		return hresult;
+
+	// The other one to trap ISR access
+	//
+	PVOID idtSubHva = nullptr;
+	uintptr_t idtSubGva = 0xffff8000'00001000; // start of system space + PAGE_SIZE
+	hresult = WhSeAllocateGuestVirtualMemory( Partition, &idtSubHva, idtSubGva, &size, WHvMapGpaRangeFlagRead | WHvMapGpaRangeFlagWrite );
+	if ( FAILED( hresult ) )
+		return hresult;
+
+	// Unmap the 2nd page immediately, keeping paging information but releasing the backing memory,
+	// thus it will generate a memory access exception when trying to jump to the Interrupt
+	// Service Routine
+	//
+	hresult = WhSeFreeGuestVirtualMemory( Partition, idtSubHva, idtSubGva, size );
+	if ( FAILED( hresult ) )
+		return hresult;
+
+	// Fill IDT
+	//
+	auto ptr = idtSubGva;
+	auto idt = reinterpret_cast< PIDT_ENTRY >( idtHva );
+	for ( auto idx = 0; idx < NUMBER_OF_DESCRIPTORS; idx++ ) {
+		auto entry = IDT_ENTRY {
+				.Low = static_cast< uint16_t >( ptr & UINT16_MAX ),
+				.Selector = 0x10, // Kernel CS index
+				.InterruptStackTable = 0,
+				.Attributes = MAKE_IDT_ATTRS( 0, 0b1110 ), // Make them traps
+				.Mid = static_cast< uint16_t >( ( ptr >> 16 ) & UINT16_MAX ),
+				.High = static_cast< uint32_t >( ( ptr >> 32 ) & UINT32_MAX ),
+				.Reserved = 0
+		};
+
+		idt[ idx ] = entry;
+		ptr += sizeof( decltype( ptr ) );
+	}
+
+	// Setup IDTR
+	//
+	Registers[ Idtr ].Table.Base = idtGva;
+	Registers[ Idtr ].Table.Limit = static_cast< uint16_t >( sizeof( IDT_ENTRY ) * NUMBER_OF_DESCRIPTORS - 1 );
 
 	return S_OK;
 }

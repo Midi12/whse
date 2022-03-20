@@ -34,6 +34,19 @@ typedef struct _MMPTE_HARDWARE
 } MMPTE_HARDWARE, * PMMPTE_HARDWARE;
 static_assert( sizeof( MMPTE_HARDWARE ) == 8 );
 
+typedef struct _IDT_ENTRY {
+	uint16_t Low;
+	uint16_t Selector;
+	uint8_t InterruptStackTable;
+	uint8_t Attributes;
+	uint16_t Mid;
+	uint32_t High;
+	uint32_t Reserved;
+} IDT_ENTRY, *PIDT_ENTRY;
+static_assert( sizeof( IDT_ENTRY ) == 16 );
+
+constexpr static size_t NUMBER_OF_DESCRIPTORS = 256;
+
 // Decompose a virtual address into paging indexes
 //
 HRESULT WhSiDecomposeVirtualAddress( uintptr_t VirtualAddress, uint16_t* Pml4Index, uint16_t* PdpIndex, uint16_t* PdIndex, uint16_t* PtIndex, uint16_t* Offset );
@@ -62,5 +75,9 @@ HRESULT WhSiInsertPageTableEntry( WHSE_PARTITION* Partition, uintptr_t VirtualAd
 // Find a suitable Guest VA
 //
 HRESULT WhSiFindBestGVA( WHSE_PARTITION* Partition, uintptr_t* GuestVa, size_t Size );
+
+// Setup IDT
+//
+HRESULT WhSiSetupInterruptDescriptorTable( WHSE_PARTITION* Partition, WHSE_REGISTERS Registers );
 
 #endif // !WINHVMEMORYINTERNAL_HPP

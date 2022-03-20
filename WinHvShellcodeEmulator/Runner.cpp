@@ -8,6 +8,7 @@
 #include <winhvplatform.h>
 
 #include <stdio.h>
+#include "../WinHvEmulator/WinHvAllocationTracker.hpp"
 
 #define EXIT_WITH_MESSAGE( x ) \
 	{ \
@@ -23,110 +24,14 @@ constexpr size_t ALIGN_UP( size_t x ) {
 	return ( ( PAGE_SIZE - 1 ) & x ) ? ( ( x + PAGE_SIZE ) & ~( PAGE_SIZE - 1 ) ) : x;
 }
 
-#define MAKE_SEGMENT(reg, sel, base, limit, dpl, l, gr)			\
-	registers[ reg ].Segment.Selector = ( sel | dpl );			\
-	registers[ reg ].Segment.Base = base;						\
-	registers[ reg ].Segment.Limit = limit;						\
-	registers[ reg ].Segment.Present = 1;						\
-	registers[ reg ].Segment.DescriptorPrivilegeLevel = dpl;	\
-	registers[ reg ].Segment.Long = l;							\
-	registers[ reg ].Segment.Granularity = gr
-
-#define MAKE_CR0(pe, mp, em, ts, et, ne, wp, am, nw, cd, pg)	\
-	(															\
-		(														\
-			( pg << 31 ) |										\
-			( cd << 30 ) |										\
-			( nw << 29 ) |										\
-			( am << 18 ) |										\
-			( wp << 16 ) |										\
-			( ne << 5 ) |										\
-			( et << 4 ) |										\
-			( ts << 3 ) |										\
-			( em << 2 ) |										\
-			( mp << 1 ) |										\
-			( pe << 0 )											\
-		) & UINT32_MAX											\
-	)
-
-#define MAKE_CR4(vme, pvi, tsd, de, pse, pae, mce, pge, pce, osfxsr, osxmmexcpt, umip, la57, vmxe, smxe, fsgsbase, pcide, osxsave, smep, smap, pke, cet, pks) \
-	(															\
-		(														\
-			( pks			<< 24 ) |							\
-			( cet			<< 23 ) |							\
-			( pke			<< 22 ) |							\
-			( smap			<< 21 ) |							\
-			( smep			<< 20 ) |							\
-			( osxsave		<< 18 ) |							\
-			( pcide			<< 17 ) |							\
-			( fsgsbase		<< 16 ) |							\
-			( smxe			<< 14 ) |							\
-			( vmxe			<< 13 ) |							\
-			( la57			<< 12 ) |							\
-			( umip			<< 11 ) |							\
-			( osxmmexcpt	<< 10 ) |							\
-			( osfxsr		<< 9 ) |							\
-			( pce			<< 8 ) |							\
-			( pge			<< 7 ) |							\
-			( mce			<< 6 ) |							\
-			( pae			<< 5 ) |							\
-			( pse			<< 4 ) |							\
-			( de			<< 3 ) |							\
-			( tsd			<< 2 ) |							\
-			( pvi			<< 1 ) |							\
-			( vme			<< 0 )								\
-		) & ( ~( 1 << 24 ) )									\
-	)
-
-#define MAKE_EFER(sce, dpe, sewbed, gewbed, l2d, lme, lma, nxe, svme, lmsle, ffxsr, tce) \
-	(															\
-		(														\
-			( tce		<< 15) |								\
-			( ffxsr		<< 14) |								\
-			( lmsle		<< 13) |								\
-			( svme		<< 12) |								\
-			( nxe		<< 11) |								\
-			( lma		<< 10) |								\
-			( lme		<< 8) |									\
-			( l2d		<< 4) |									\
-			( gewbed	<< 3) |									\
-			( sewbed	<< 2) |									\
-			( dpe		<< 1) |									\
-			( sce		<< 0 )									\
-		) & ( ~( 1 << 16 ) )									\
-	)
-
-#define MAKE_RFLAGS(cf, pf, af, zf, sf, tf, if_, df, of, iopl, nt, rf, vm, ac, vif, vip, id) \
-	(															\
-		(														\
-			( id	<< 21 ) |									\
-			( vip	<< 20 ) |									\
-			( vif	<< 19 ) |									\
-			( ac	<< 18 ) |									\
-			( vm	<< 17 ) |									\
-			( rf	<< 16 ) |									\
-			( nt	<< 14 ) |									\
-			( iopl	<< 12 ) |									\
-			( of	<< 11 ) |									\
-			( df	<< 10 ) |									\
-			( if_	<< 9 ) |									\
-			( tf	<< 8 ) |									\
-			( sf	<< 7 ) |									\
-			( zf	<< 6 ) |									\
-			( af	<< 4 ) |									\
-			( pf	<< 2 ) |									\
-			(  1	<< 1 ) |									\
-			( cf	<< 0 )										\
-		) & ( ~( 1 << 21 ) )									\
-	)
-
 bool OnMemoryAccessExit( _WHSE_PARTITION* Partition, WHV_VP_EXIT_CONTEXT* VpContext, WHSE_MEMORY_ACCESS_CONTEXT* ExitContext ) {
 	printf( "HandleMemoryAccessExit" );
 
 	// Fix the VA
 	//
-	uintptr_t hva { };
-	auto hresult = WhSeAllocateGuestVirtualMemory( Partition, &hva, ExitContext->Gva, PAGE_SIZE, WHvMapGpaRangeFlagRead | WHvMapGpaRangeFlagWrite );
+	PVOID hva = nullptr;
+	size_t size = PAGE_SIZE;
+	auto hresult = WhSeAllocateGuestVirtualMemory( Partition, &hva, ExitContext->Gva, &size, WHvMapGpaRangeFlagRead | WHvMapGpaRangeFlagWrite );
 	if ( FAILED( hresult ) )
 		return false;
 
@@ -143,18 +48,24 @@ bool OnIoPortAccessExit( _WHSE_PARTITION* Partition, WHV_VP_EXIT_CONTEXT* VpCont
 	auto registers = Partition->VirtualProcessor.Registers;
 
 	// Check which instruction is currently executed
-	// ( Tested instruction are 1 byte sized )
 	//
-	auto opcode = ExitContext->InstructionBytes[ 0 ];
-	if ( opcode == 0xEC ) {
+	auto port = ExitContext->PortNumber;
+	if ( ExitContext->AccessInfo.IsWrite == 0 && port == 0x1f0 ) {
 		// EC	IN AL,DX	Input byte from I/O port in DX into AL.
 		//
-		registers[ Rax ] = static_cast< uint8_t >( 0x12 );
-	} else if ( opcode == 0xEE ) {
+		registers[ Rax ].Reg64 = static_cast< uint8_t >( 0x12 );
+	} else if ( ExitContext->AccessInfo.IsWrite == 1 && port == 0x1f0 ) {
 		// EE	OUT DX, AL	Output byte in AL to I/O port address in DX.
 		//
-		registers[ Rax ] = static_cast< uint8_t >( 0x1337 );
-	} else
+		registers[ Rax ].Reg64 = static_cast< uint8_t >( 0x1337 );
+	}
+	else
+		return false;
+
+	// Adjust rip ( ONLY FOR TEST )
+	registers[ Rip ].Reg64 += 1;
+
+	if ( FAILED( WhSeSetProcessorRegisters( Partition, registers ) ) )
 		return false;
 
 	return true;
@@ -162,6 +73,20 @@ bool OnIoPortAccessExit( _WHSE_PARTITION* Partition, WHV_VP_EXIT_CONTEXT* VpCont
 
 bool OnUnrecoverableExceptionExit( _WHSE_PARTITION* Partition, WHV_VP_EXIT_CONTEXT* VpContext, WHSE_UNRECOVERABLE_EXCEPTION_CONTEXT* ExitContext ) {
 	printf( "UnrecoverableExceptionCallback" );
+
+	auto idtr = Partition->VirtualProcessor.Registers[ Idtr ].Table;
+
+	WHSE_ALLOCATION_NODE* node = nullptr;
+	auto hresult = WhSeFindAllocationNodeByGva(Partition, idtr.Base, &node);
+	if ( FAILED( hresult ) )
+		return true;
+
+	uintptr_t gpa;
+	WHV_TRANSLATE_GVA_RESULT tr { };
+	hresult = WhSeTranslateGvaToGpa( Partition, reinterpret_cast< uintptr_t >( node->GuestVirtualAddress ) + 0x1000, &gpa, &tr );
+	if ( FAILED( hresult ) )
+		return true;
+
 	return false;
 }
 
@@ -243,62 +168,13 @@ DWORD WINAPI ExecuteThread( LPVOID lpParameter ) {
 	if ( FAILED( WhSeGetProcessorRegisters( partition, registers ) ) )
 		return -1;
 
-	int ring;
-	int codeSelector;
-	int dataSelector;
-
-	// Setup processor
+	// Set Entry Point
 	//
-	switch ( params->Mode ) {
-		using enum PROCESSOR_MODE;
-		
-		// Setup processor state for kernel mode 
-		//
-		case KernelMode:
-			{
-				ring = 0;
-				codeSelector = 0x10;
-				dataSelector = 0x18;
-			}
-			break;
-
-		// Setup processor state for user mode
-		//
-		case UserMode:
-			{
-				ring = 3;
-				codeSelector = 0x30;
-				dataSelector = 0x28;
-			}
-			break;
-
-		// Unknown layout : exit
-		//
-		default:
-			return -1;
-	}
-
-	// Setup segment registers
-	//
-	registers[ Cs ].Segment.Selector = ( codeSelector | ring );
-	registers[ Cs ].Segment.DescriptorPrivilegeLevel = ring;
-	registers[ Cs ].Segment.Long = 1;
-
-	registers[ Ss ].Segment.Selector = ( dataSelector | ring );
-	registers[ Ss ].Segment.DescriptorPrivilegeLevel = ring;
-	registers[ Ss ].Segment.Default = 1;
-	registers[ Ss ].Segment.Granularity = 1;
-
-	registers[ Ds ] = registers[ Ss ];
-	registers[ Es ] = registers[ Ss ];
-	registers[ Gs ] = registers[ Ss ];
-
 	registers[ Rip ].Reg64 = params->Entrypoint;
-	registers[ Rsp ].Reg64 = params->Stack;
 
-	// Set IF bit
+	// Set Stack Pointer
 	//
-	registers[ Rflags ].Reg64 = MAKE_RFLAGS( 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 );
+	registers[ Rsp ].Reg64 = params->Stack;
 
 	if ( FAILED( WhSeSetProcessorRegisters( partition, registers ) ) )
 		return -1;
@@ -326,12 +202,12 @@ DWORD WINAPI ExecuteThread( LPVOID lpParameter ) {
 	// *---------------------------------------------------------------------------------------------------------------------------*
 	// | Allocate VA then free it, it will add the VA to the PT but unmap the backing page, this will trigger a memory access exit |
 	// *---------------------------------------------------------------------------------------------------------------------------*
-	uintptr_t gva = 0xdeadbeef;
+	/*uintptr_t gva = 0xdeadbeef;
 	PVOID hva = nullptr;
 	size_t sz = 0x1000;
 	WhSeAllocateGuestVirtualMemory( partition, &hva, gva, &sz, WHvMapGpaRangeFlagRead | WHvMapGpaRangeFlagWrite );
 
-	WhSeFreeGuestVirtualMemory( partition, hva, gva, sz );
+	WhSeFreeGuestVirtualMemory( partition, hva, gva, sz );*/
 
 	// *---------------*
 	// |  END TESTING  |
@@ -391,7 +267,7 @@ DWORD WINAPI Run( const RUN_OPTIONS& options ) {
 
 	// Create the processor
 	// 
-	if ( FAILED( WhSeCreateProcessor( partition ) ) )
+	if ( FAILED( WhSeCreateProcessor( partition, options.Mode ) ) )
 		EXIT_WITH_MESSAGE( "Failed to create the processor" );
 
 	printf( "Created processor %d\n", partition->VirtualProcessor.Index );
@@ -402,30 +278,7 @@ DWORD WINAPI Run( const RUN_OPTIONS& options ) {
 		EXIT_WITH_MESSAGE( "Failed to initialize memory layout" );
 
 	printf( "Initialized paging (CR3 = %llx)\n", static_cast< unsigned long long >( partition->MemoryLayout.Pml4PhysicalAddress ) );
-
-	uintptr_t lowestAddress = 0;
-	uintptr_t highestAddress = 0;
-
-	// Setup Virtual Address Space boundaries
-	//
-	switch ( options.Mode ) {
-		using enum PROCESSOR_MODE;
-		case UserMode:
-			lowestAddress = 0x00000000'00000000;
-			highestAddress = 0x00008000'00000000 - 64KiB;
-			break;
-		case KernelMode:
-			lowestAddress = 0xffff8000'00000000;
-			highestAddress = 0xffffffff'ffffffff - 4MiB;
-			break;
-		default:
-			EXIT_WITH_MESSAGE( "Unsupported mode" );
-	}
-
-	partition->MemoryLayout.VirtualAddressSpace.LowestAddress = lowestAddress;
-	partition->MemoryLayout.VirtualAddressSpace.HighestAddress = highestAddress;
-	partition->MemoryLayout.VirtualAddressSpace.SizeInBytes = highestAddress - lowestAddress;
-
+	
 	// Allocate stack
 	//
 	PVOID stackHva = nullptr;
@@ -444,7 +297,7 @@ DWORD WINAPI Run( const RUN_OPTIONS& options ) {
 
 	::CopyMemory( shellcode, options.Code, options.CodeSize );
 
-	constexpr uintptr_t codeGva = 0x10000;
+	uintptr_t codeGva = options.BaseAddress != 0 ? options.BaseAddress : 0x10000;
 	if( FAILED( WhSeMapHostToGuestVirtualMemory( partition, shellcode, codeGva, ALIGN_UP( options.CodeSize ), WHvMapGpaRangeFlagRead | WHvMapGpaRangeFlagWrite | WHvMapGpaRangeFlagExecute ) ) )
 		EXIT_WITH_MESSAGE( "Failed to map shellcode" );
 
@@ -455,8 +308,7 @@ DWORD WINAPI Run( const RUN_OPTIONS& options ) {
 	RUN_PARAMS params {
 		.Entrypoint = codeGva,
 		.Stack = stackGva + stackSize - PAGE_SIZE, // set rsp to the end of the allocated stack range as stack "grows downward" (let 1 page on top for "safety")
-		.Partition = partition,
-		.Mode = options.Mode
+		.Partition = partition
 	};
 
 	// test code

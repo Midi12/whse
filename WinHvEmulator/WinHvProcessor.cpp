@@ -1,10 +1,16 @@
 #include "WinHvProcessor.hpp"
+#include "WinHvUtils.hpp"
 
 #include <memory.h>
 
-// Create a virtual processor in a partition
-//
-HRESULT WhSeCreateProcessor( WHSE_PARTITION* Partition ) {
+/**
+ * @brief Create a virtual processor in a partition
+ *
+ * @param Partition The VM partition
+ * @param Mode The processor mode
+ * @return A result code
+ */
+HRESULT WhSeCreateProcessor( WHSE_PARTITION* Partition, PROCESSOR_MODE Mode ) {
 	if ( Partition == nullptr )
 		return HRESULT_FROM_WIN32( ERROR_INVALID_PARAMETER );
 
@@ -16,11 +22,78 @@ HRESULT WhSeCreateProcessor( WHSE_PARTITION* Partition ) {
 		return hresult;
 
 	auto registers = Partition->VirtualProcessor.Registers;
-	return WhSeGetProcessorRegisters( Partition, registers );
+	hresult = WhSeGetProcessorRegisters( Partition, registers );
+	if ( FAILED( hresult ) )
+		return hresult;
+
+	vp->Mode = Mode;
+
+	uintptr_t lowestAddress = 0;
+	uintptr_t highestAddress = 0;
+
+	int ring;
+	int codeSelector;
+	int dataSelector;
+
+	switch ( Mode ) {
+		using enum PROCESSOR_MODE;
+	case UserMode:
+		lowestAddress = 0x00000000'00000000;
+		highestAddress = 0x00008000'00000000 - 64KiB;
+		ring = 3;
+		codeSelector = 0x30;
+		dataSelector = 0x28;
+		break;
+	case KernelMode:
+		lowestAddress = 0xffff8000'00000000;
+		highestAddress = 0xffffffff'ffffffff - 4MiB;
+		ring = 0;
+		codeSelector = 0x10;
+		dataSelector = 0x18;
+		break;
+	default:
+		return HRESULT_FROM_WIN32( ERROR_NOT_SUPPORTED );
+	}
+
+	// Setup Virtual Address Space boundaries
+	//
+	Partition->MemoryLayout.VirtualAddressSpace.LowestAddress = lowestAddress;
+	Partition->MemoryLayout.VirtualAddressSpace.HighestAddress = highestAddress;
+	Partition->MemoryLayout.VirtualAddressSpace.SizeInBytes = ( highestAddress - lowestAddress ) - 1;
+
+	// Setup segment registers
+	//
+	registers[ Cs ].Segment.Selector = ( codeSelector | ring );
+	registers[ Cs ].Segment.DescriptorPrivilegeLevel = ring;
+	registers[ Cs ].Segment.Long = 1;
+
+	registers[ Ss ].Segment.Selector = ( dataSelector | ring );
+	registers[ Ss ].Segment.DescriptorPrivilegeLevel = ring;
+	registers[ Ss ].Segment.Default = 1;
+	registers[ Ss ].Segment.Granularity = 1;
+
+	registers[ Ds ] = registers[ Ss ];
+	registers[ Es ] = registers[ Ss ];
+	registers[ Gs ] = registers[ Ss ];
+
+	// Set IF bit
+	//
+	registers[ Rflags ].Reg64 = MAKE_RFLAGS( 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 );
+
+	hresult = WhSeSetProcessorRegisters( Partition, registers );
+	if ( FAILED( hresult ) )
+		return hresult;
+
+	return hresult;
 }
 
-// Set a virtual processor registers
-//
+/**
+ * @brief Set a virtual processor registers
+ *
+ * @param Partition The VM partition
+ * @param Registers The registers array to set the values 
+ * @return A result code
+ */
 HRESULT WhSeSetProcessorRegisters( WHSE_PARTITION* Partition, WHSE_REGISTERS Registers ) {
 	if ( Partition == nullptr )
 		return HRESULT_FROM_WIN32( ERROR_INVALID_PARAMETER );
@@ -35,8 +108,13 @@ HRESULT WhSeSetProcessorRegisters( WHSE_PARTITION* Partition, WHSE_REGISTERS Reg
 	return ::WHvSetVirtualProcessorRegisters( Partition->Handle, vp->Index, g_registers, g_registers_count, vp->Registers );
 }
 
-// Get a virtual processor registers
-//
+/**
+ * @brief Get a virtual processor registers
+ *
+ * @param Partition The VM partition
+ * @param Registers The registers array receiving the values 
+ * @return A result code
+ */
 HRESULT WhSeGetProcessorRegisters( WHSE_PARTITION* Partition, WHSE_REGISTERS Registers ) {
 	if ( Partition == nullptr )
 		return HRESULT_FROM_WIN32( ERROR_INVALID_PARAMETER );
@@ -56,8 +134,13 @@ HRESULT WhSeGetProcessorRegisters( WHSE_PARTITION* Partition, WHSE_REGISTERS Reg
 	return hresult;
 }
 
-// Run a virtual processor registers
-//
+/**
+ * @brief Run a virtual processor
+ *
+ * @param Partition The VM partition
+ * @param ExitReason The returned exit reason
+ * @return A result code
+ */
 HRESULT WhSeRunProcessor( WHSE_PARTITION* Partition, WHSE_VP_EXIT_REASON* ExitReason ) {
 	if ( Partition == nullptr )
 		return HRESULT_FROM_WIN32( ERROR_INVALID_PARAMETER );
@@ -92,9 +175,20 @@ HRESULT WhSeRunProcessor( WHSE_PARTITION* Partition, WHSE_VP_EXIT_REASON* ExitRe
 			break;
 		case WHvRunVpExitReasonMemoryAccess:
 			{
-				auto callback = reinterpret_cast< WHSE_EXIT_MEMORYACCESS_CALLBACK >( callbacks[ MemoryAccess ] );
-				if ( callback != nullptr )
-					retry = callback( Partition, &vp->ExitContext.VpContext, &vp->ExitContext.MemoryAccess );
+				// Check if the guest virtual address matches the IDT range
+				//
+				if ( ( vp->ExitContext.MemoryAccess.Gva & 0xffffffff'fffff000 ) == Partition->MemoryLayout.InterruptDescriptorTableVirtualAddress ) {
+					// Handle through special callbacks
+					//
+					auto index = vp->ExitContext.MemoryAccess.Gva & 0x00000000'00000fff;
+				}
+				else {
+					// Handle normally
+					//
+					auto callback = reinterpret_cast< WHSE_EXIT_MEMORYACCESS_CALLBACK >( callbacks[ MemoryAccess ] );
+					if ( callback != nullptr )
+						retry = callback( Partition, &vp->ExitContext.VpContext, &vp->ExitContext.MemoryAccess );
+				}
 			}
 			break;
 		case WHvRunVpExitReasonX64IoPortAccess:
@@ -187,8 +281,12 @@ HRESULT WhSeRunProcessor( WHSE_PARTITION* Partition, WHSE_VP_EXIT_REASON* ExitRe
 	return hresult;
 }
 
-// Delete a virtual processor from the partition
-//
+/**
+ * @brief Delete a virtual processor from the partition
+ *
+ * @param Partition The VM partition
+ * @return A result code
+ */
 HRESULT WhSeDeleteProcessor( WHSE_PARTITION* Partition ) {
 	if ( Partition == nullptr )
 		return HRESULT_FROM_WIN32( ERROR_INVALID_PARAMETER );

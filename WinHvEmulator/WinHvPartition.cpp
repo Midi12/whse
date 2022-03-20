@@ -1,8 +1,12 @@
 #include "WinHvPartition.hpp"
 #include "WinHvAllocationTracker.hpp"
 
-// Create an hypervisor partition
-//
+/**
+ * @brief Create an hypervisor partition
+ *
+ * @param Partition The VM partition
+ * @return A result code
+ */
 HRESULT WhSeCreatePartition( WHSE_PARTITION** Partition ) {
 	if ( Partition == nullptr )
 		return HRESULT_FROM_WIN32( ERROR_INVALID_PARAMETER );
@@ -61,8 +65,12 @@ HRESULT WhSeCreatePartition( WHSE_PARTITION** Partition ) {
 	return hresult;
 }
 
-// Delete an hypervisor partition
-//
+/**
+ * @brief Delete an hypervisor partition
+ *
+ * @param Partition The VM partition
+ * @return A result code
+ */
 HRESULT WhSeDeletePartition( WHSE_PARTITION** Partition ) {
 	if ( Partition == nullptr )
 		return HRESULT_FROM_WIN32( ERROR_INVALID_PARAMETER );
