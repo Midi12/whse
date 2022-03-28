@@ -52,3 +52,28 @@ HRESULT WhSpLookupHVAFromPFN( WHSE_PARTITION* Partition, uintptr_t PageFrameNumb
 
 	return hresult;
 }
+
+/**
+ * @brief Private api
+ *
+ * @param Entry The returned GDT entry
+ * @param Base
+ * @param Limit
+ * @param Access
+ * @param Flags
+ * @return A result code
+ */
+HRESULT WhSpCreateGdtEntry( GDT_ENTRY* Entry, uintptr_t Base, ptrdiff_t Limit, uint8_t Access, uint8_t Flags ) {
+	if ( Entry == nullptr )
+		return HRESULT_FROM_WIN32( ERROR_INVALID_PARAMETER );
+
+	Entry->LimitLow = static_cast< uint16_t >( Limit & 0xffff );
+	Entry->BaseLow = static_cast< uint16_t >( Base & 0xffff );
+	Entry->BaseMid = static_cast< uint8_t >( ( Base >> 16 ) & 0xff );
+	Entry->Access = Access;
+	Entry->LimitHigh = static_cast< uint8_t >( ( Limit >> 16 ) & 0xf );
+	Entry->Flags = static_cast< uint8_t >( Flags & 0xf );
+	Entry->BaseHigh = static_cast< uint8_t >( ( Base >> 24 ) & 0xff );
+
+	return S_OK;
+}

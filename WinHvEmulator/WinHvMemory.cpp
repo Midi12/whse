@@ -359,7 +359,13 @@ HRESULT WhSeInitializeMemoryLayout( WHSE_PARTITION* Partition ) {
 	if ( FAILED( hresult ) )
 		return hresult;
 
-	// Setup custom IDT
+	// Setup GDT
+	//
+	hresult = WhSiSetupGlobalDescriptorTable( Partition, registers );
+	if ( FAILED( hresult ) )
+		return hresult;
+
+	// Setup IDT
 	//
 	hresult = WhSiSetupInterruptDescriptorTable( Partition, registers );
 	if ( FAILED( hresult ) )

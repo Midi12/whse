@@ -41,15 +41,19 @@ HRESULT WhSeCreateProcessor( WHSE_PARTITION* Partition, PROCESSOR_MODE Mode ) {
 		lowestAddress = 0x00000000'00000000;
 		highestAddress = 0x00008000'00000000 - 64KiB;
 		ring = 3;
-		codeSelector = 0x30;
-		dataSelector = 0x28;
+		//codeSelector = 0x30;
+		//dataSelector = 0x28;
+		codeSelector = 0x18;
+		dataSelector = 0x20;
 		break;
 	case KernelMode:
 		lowestAddress = 0xffff8000'00000000;
 		highestAddress = 0xffffffff'ffffffff - 4MiB;
 		ring = 0;
-		codeSelector = 0x10;
-		dataSelector = 0x18;
+		//codeSelector = 0x10;
+		//dataSelector = 0x18;
+		codeSelector = 0x08;
+		dataSelector = 0x10;
 		break;
 	default:
 		return HRESULT_FROM_WIN32( ERROR_NOT_SUPPORTED );
@@ -160,7 +164,8 @@ HRESULT WhSeRunProcessor( WHSE_PARTITION* Partition, WHSE_VP_EXIT_REASON* ExitRe
 		return hresult;
 
 	bool retry = false;
-	auto callbacks = Partition->ExitCallbacks.Callbacks;
+	auto exitCallbacks = Partition->ExitCallbacks.Callbacks;
+	auto isrCallbacks = Partition->IsrCallbacks.Callbacks;
 
 	switch ( vp->ExitContext.ExitReason ) {
 		using enum WHSE_EXIT_CALLBACK_SLOT;
@@ -168,24 +173,30 @@ HRESULT WhSeRunProcessor( WHSE_PARTITION* Partition, WHSE_VP_EXIT_REASON* ExitRe
 
 		case WHvRunVpExitReasonCanceled:
 			{
-				auto callback = reinterpret_cast< WHSE_EXIT_USER_CANCELED_CALLBACK >( callbacks[ UserCanceled ] );
+				auto callback = reinterpret_cast< WHSE_EXIT_USER_CANCELED_CALLBACK >( exitCallbacks[ UserCanceled ] );
 				if ( callback != nullptr )
 					retry = callback( Partition, &vp->ExitContext.VpContext, &vp->ExitContext.CancelReason );
 			}
 			break;
 		case WHvRunVpExitReasonMemoryAccess:
 			{
-				// Check if the guest virtual address matches the IDT range
+				// Check if the guest virtual address matches the trap page
 				//
 				if ( ( vp->ExitContext.MemoryAccess.Gva & 0xffffffff'fffff000 ) == Partition->MemoryLayout.InterruptDescriptorTableVirtualAddress ) {
 					// Handle through special callbacks
 					//
-					auto index = vp->ExitContext.MemoryAccess.Gva & 0x00000000'00000fff;
+					auto offset = vp->ExitContext.MemoryAccess.Gva & 0x00000000'00000fff;
+
+					auto index = offset / sizeof( uintptr_t );
+
+					auto callback = Partition->IsrCallbacks.Callbacks[ static_cast< uint8_t >( index ) ];
+					if ( callback != nullptr )
+						retry = callback( Partition );
 				}
 				else {
 					// Handle normally
 					//
-					auto callback = reinterpret_cast< WHSE_EXIT_MEMORYACCESS_CALLBACK >( callbacks[ MemoryAccess ] );
+					auto callback = reinterpret_cast< WHSE_EXIT_MEMORYACCESS_CALLBACK >( exitCallbacks[ MemoryAccess ] );
 					if ( callback != nullptr )
 						retry = callback( Partition, &vp->ExitContext.VpContext, &vp->ExitContext.MemoryAccess );
 				}
@@ -193,77 +204,77 @@ HRESULT WhSeRunProcessor( WHSE_PARTITION* Partition, WHSE_VP_EXIT_REASON* ExitRe
 			break;
 		case WHvRunVpExitReasonX64IoPortAccess:
 			{
-				auto callback = reinterpret_cast< WHSE_EXIT_IO_PORT_ACCESS_CALLBACK >( callbacks[ IoPortAccess ] );
+				auto callback = reinterpret_cast< WHSE_EXIT_IO_PORT_ACCESS_CALLBACK >( exitCallbacks[ IoPortAccess ] );
 				if ( callback != nullptr )
 					retry = callback( Partition, &vp->ExitContext.VpContext, &vp->ExitContext.IoPortAccess );
 			}
 			break;
 		case WHvRunVpExitReasonUnrecoverableException:
 			{
-				auto callback = reinterpret_cast< WHSE_EXIT_UNRECOVERABLE_EXCEPTION_CALLBACK >( callbacks[ UnrecoverableException ] );
+				auto callback = reinterpret_cast< WHSE_EXIT_UNRECOVERABLE_EXCEPTION_CALLBACK >( exitCallbacks[ UnrecoverableException ] );
 				if ( callback != nullptr )
 					retry = callback( Partition, &vp->ExitContext.VpContext, nullptr );
 			}
 			break;
 		case WHvRunVpExitReasonInvalidVpRegisterValue:
 			{
-				auto callback = reinterpret_cast< WHSE_EXIT_INVALID_REGISTER_VALUE_CALLBACK >( callbacks[ InvalidVpRegisterValue ] );
+				auto callback = reinterpret_cast< WHSE_EXIT_INVALID_REGISTER_VALUE_CALLBACK >( exitCallbacks[ InvalidVpRegisterValue ] );
 				if ( callback != nullptr )
 					retry = callback( Partition, &vp->ExitContext.VpContext, nullptr );
 			}
 			break;
 		case WHvRunVpExitReasonUnsupportedFeature:
 			{
-				auto callback = reinterpret_cast< WHSE_EXIT_UNSUPPORTED_FEATURE_CALLBACK >( callbacks[ UnsupportedFeature ] );
+				auto callback = reinterpret_cast< WHSE_EXIT_UNSUPPORTED_FEATURE_CALLBACK >( exitCallbacks[ UnsupportedFeature ] );
 				if ( callback != nullptr )
 					retry = callback( Partition, &vp->ExitContext.VpContext, &vp->ExitContext.UnsupportedFeature );
 			}
 			break;
 		case WHvRunVpExitReasonX64InterruptWindow:
 			{
-				auto callback = reinterpret_cast< WHSE_EXIT_INTERRUPTION_DELIVERY_CALLBACK >( callbacks[ InterruptWindow ] );
+				auto callback = reinterpret_cast< WHSE_EXIT_INTERRUPTION_DELIVERY_CALLBACK >( exitCallbacks[ InterruptWindow ] );
 				if ( callback != nullptr )
 					retry = callback( Partition, &vp->ExitContext.VpContext, &vp->ExitContext.InterruptWindow );
 			}
 			break;
 		case WHvRunVpExitReasonX64Halt:
 			{
-				auto callback = reinterpret_cast< WHSE_EXIT_HALT_CALLBACK >( callbacks[ Halt ] );
+				auto callback = reinterpret_cast< WHSE_EXIT_HALT_CALLBACK >( exitCallbacks[ Halt ] );
 				if ( callback != nullptr )
 					retry = callback( Partition, &vp->ExitContext.VpContext, nullptr );
 			}
 			break;
 		case WHvRunVpExitReasonX64ApicEoi:
 			{
-				auto callback = reinterpret_cast< WHSE_EXIT_APIC_EOI_CALLBACK >( callbacks[ ApicEoi ] );
+				auto callback = reinterpret_cast< WHSE_EXIT_APIC_EOI_CALLBACK >( exitCallbacks[ ApicEoi ] );
 				if ( callback != nullptr )
 					retry = callback( Partition, &vp->ExitContext.VpContext, &vp->ExitContext.ApicEoi );
 			}
 			break;
 		case WHvRunVpExitReasonX64MsrAccess:
 			{
-				auto callback = reinterpret_cast< WHSE_EXIT_MSR_ACCESS_CALLBACK >( callbacks[ MsrAccess ] );
+				auto callback = reinterpret_cast< WHSE_EXIT_MSR_ACCESS_CALLBACK >( exitCallbacks[ MsrAccess ] );
 				if ( callback != nullptr )
 					retry = callback( Partition, &vp->ExitContext.VpContext, &vp->ExitContext.MsrAccess );
 			}
 			break;
 		case WHvRunVpExitReasonX64Cpuid:
 			{
-				auto callback = reinterpret_cast< WHSE_EXIT_CPUID_ACCESS_CALLBACK >( callbacks[ Cpuid ] );
+				auto callback = reinterpret_cast< WHSE_EXIT_CPUID_ACCESS_CALLBACK >( exitCallbacks[ Cpuid ] );
 				if ( callback != nullptr )
 					retry = callback( Partition, &vp->ExitContext.VpContext, &vp->ExitContext.CpuidAccess );
 			}
 			break;
 		case WHvRunVpExitReasonException:
 			{
-				auto callback = reinterpret_cast< WHSE_EXIT_VP_EXCEPTION_CALLBACK >( callbacks[ Exception ] );
+				auto callback = reinterpret_cast< WHSE_EXIT_VP_EXCEPTION_CALLBACK >( exitCallbacks[ Exception ] );
 				if ( callback != nullptr )
 					retry = callback( Partition, &vp->ExitContext.VpContext, &vp->ExitContext.VpException );
 			}
 			break;
 		case WHvRunVpExitReasonX64Rdtsc:
 			{
-				auto callback = reinterpret_cast< WHSE_EXIT_RDTSC_ACCESS_CALLBACK >( callbacks[ Rdtsc ] );
+				auto callback = reinterpret_cast< WHSE_EXIT_RDTSC_ACCESS_CALLBACK >( exitCallbacks[ Rdtsc ] );
 				if ( callback != nullptr )
 					retry = callback( Partition, &vp->ExitContext.VpContext, &vp->ExitContext.ReadTsc );
 			}

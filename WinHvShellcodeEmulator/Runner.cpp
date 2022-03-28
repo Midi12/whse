@@ -154,6 +154,14 @@ bool OnExit( WHSE_PARTITION* Partition, WHV_VP_EXIT_CONTEXT* VpContext, void* Ex
 	return false; 
 }
 
+// Handle Page fault
+//
+bool OnPageFault( WHSE_PARTITION* Partition ) {
+	auto cr2 = Partition->VirtualProcessor.Registers[ Cr2 ];
+	printf( "OnPageFault: cr2=%llx\n", cr2.Reg64 );
+	return true;
+}
+
 // Execute a shellcode through a virtual processor
 //
 DWORD WINAPI ExecuteThread( LPVOID lpParameter ) {
@@ -194,6 +202,10 @@ DWORD WINAPI ExecuteThread( LPVOID lpParameter ) {
 	partition->ExitCallbacks.u.VirtualProcessorCallback = &OnVirtualProcessorExit;
 	partition->ExitCallbacks.u.RdtscAccessCallback = &OnRdtscAccessExit;
 	partition->ExitCallbacks.u.UserCanceledCallback = &OnUserCanceledExit;
+
+	// Set Page Fault callback
+	//
+	partition->IsrCallbacks.u.PageFaultCallback = &OnPageFault;
 
 	// *---------------*
 	// | START TESTING |

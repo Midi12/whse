@@ -4,7 +4,7 @@
 [x] Private api in their own file
 [x] Tracker api in their own file
 [x] Kernel/User mode when creating the processor
-[ ] Handle page fault/gp exception/... through custom IDT
+[ ] Handle page fault/gp exception/... through custom GDT+IDT
 [ ] Memory management through memory block
 [ ] New shellcode for debug -> test all callbacks
 [ ] Check all code path for clean memory handling

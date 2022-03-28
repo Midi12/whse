@@ -8,7 +8,7 @@
 
 #include <cstdint>
 
-
+#pragma pack( push, 1 )
 typedef struct _MMPTE_HARDWARE
 {
 	union
@@ -32,8 +32,11 @@ typedef struct _MMPTE_HARDWARE
 		UINT64 AsUlonglong;
 	};
 } MMPTE_HARDWARE, * PMMPTE_HARDWARE;
+#pragma pack( pop )
+
 static_assert( sizeof( MMPTE_HARDWARE ) == 8 );
 
+#pragma pack( push, 1 )
 typedef struct _IDT_ENTRY {
 	uint16_t Low;
 	uint16_t Selector;
@@ -42,10 +45,28 @@ typedef struct _IDT_ENTRY {
 	uint16_t Mid;
 	uint32_t High;
 	uint32_t Reserved;
-} IDT_ENTRY, *PIDT_ENTRY;
+} IDT_ENTRY, * PIDT_ENTRY;
+#pragma pack( pop )
+
 static_assert( sizeof( IDT_ENTRY ) == 16 );
 
-constexpr static size_t NUMBER_OF_DESCRIPTORS = 256;
+constexpr static size_t NUMBER_OF_IDT_DESCRIPTORS = 256;
+
+#pragma pack( push, 1 )
+typedef struct _GDT_ENTRY {
+	uint16_t LimitLow;
+	uint16_t BaseLow;
+	uint8_t BaseMid;
+	uint8_t Access;
+	uint8_t LimitHigh : 4;
+	uint8_t Flags : 4;
+	uint8_t BaseHigh;
+} GDT_ENTRY, * PGDT_ENTRY;
+#pragma pack( pop )
+
+static_assert( sizeof( GDT_ENTRY ) == 8 );
+
+constexpr static size_t NUMBER_OF_GDT_DESCRIPTORS = 5;
 
 // Decompose a virtual address into paging indexes
 //
@@ -75,6 +96,10 @@ HRESULT WhSiInsertPageTableEntry( WHSE_PARTITION* Partition, uintptr_t VirtualAd
 // Find a suitable Guest VA
 //
 HRESULT WhSiFindBestGVA( WHSE_PARTITION* Partition, uintptr_t* GuestVa, size_t Size );
+
+// Setup GDT
+//
+HRESULT WhSiSetupGlobalDescriptorTable( WHSE_PARTITION* Partition, WHSE_REGISTERS Registers );
 
 // Setup IDT
 //

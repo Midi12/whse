@@ -311,6 +311,91 @@ constexpr uint8_t MAKE_IDT_ATTRS( uint8_t Dpl, uint8_t GateType ) {
 }
 
 /**
+ * @brief Setup GDT
+ *
+ * @param Partition The VM partition
+ * @param Registers
+ * @return A result code
+ */
+HRESULT WhSiSetupGlobalDescriptorTable( WHSE_PARTITION* Partition, WHSE_REGISTERS Registers ) {
+	if ( Partition == nullptr )
+		return HRESULT_FROM_WIN32( ERROR_INVALID_PARAMETER );
+
+	if ( Registers == nullptr )
+		return HRESULT_FROM_WIN32( ERROR_INVALID_PARAMETER );
+
+	// Allocate a page for the GDT
+	//
+	PVOID gdtHva = nullptr;
+	uintptr_t gdtGva = 0xffff8000'00000000;
+	size_t size = PAGE_SIZE;
+	auto hresult = WhSeAllocateGuestVirtualMemory( Partition, &gdtHva, gdtGva, &size, WHvMapGpaRangeFlagRead | WHvMapGpaRangeFlagWrite );
+	if ( FAILED( hresult ) )
+		return hresult;
+
+	// Create the descriptors
+	//
+	uintptr_t base = 0;
+	ptrdiff_t limit = 0xfffff;
+
+	GDT_ENTRY nullDesc { 0 };
+	hresult = WhSpCreateGdtEntry( &nullDesc, 0, 0, 0x00, 0x0 );
+	if ( FAILED( hresult ) )
+		return hresult;
+
+	GDT_ENTRY kernelModeCodeSegmentDesc { 0 };
+	hresult = WhSpCreateGdtEntry( &kernelModeCodeSegmentDesc, base, limit, 0x9a, 0xa );
+	if ( FAILED( hresult ) )
+		return hresult;
+
+	GDT_ENTRY kernelModeDataSegmentDesc { 0 };
+	hresult = WhSpCreateGdtEntry( &kernelModeDataSegmentDesc, base, limit, 0x92, 0xc );
+	if ( FAILED( hresult ) )
+		return hresult;
+
+	GDT_ENTRY userModeCodeSegmentDesc { 0 };
+	hresult = WhSpCreateGdtEntry( &userModeCodeSegmentDesc, base, limit, 0xfa, 0xa );
+	if ( FAILED( hresult ) )
+		return hresult;
+
+	GDT_ENTRY userModeDataSegmentDesc { 0 };
+	hresult = WhSpCreateGdtEntry( &userModeDataSegmentDesc, base, limit, 0xf2, 0xc );
+	if ( FAILED( hresult ) )
+		return hresult;
+
+	// Load the temp descriptors in memory
+	//
+	auto gdt = reinterpret_cast< PGDT_ENTRY >( gdtHva );
+	
+	// Offset : 0x0000	Use : Null Descriptor
+	//
+	gdt[ 0 ] = nullDesc;
+
+	// Offset : 0x0008	Use : Kernel Mode Code Segment
+	//
+	gdt[ 1 ] = kernelModeCodeSegmentDesc;
+
+	// Offset : 0x0010	Use : Kernel Mode Data Segment
+	//
+	gdt[ 2 ] = kernelModeDataSegmentDesc;
+
+	// Offset : 0x0018	Use : User Mode Code Segment
+	//
+	gdt[ 3 ] = userModeCodeSegmentDesc;
+
+	// Offset : 0x0020	Use : User Mode Data Segment
+	//
+	gdt[ 4 ] = userModeDataSegmentDesc;
+
+	// Load GDTR
+	//
+	Registers[ Gdtr ].Table.Base = gdtGva;
+	Registers[ Gdtr ].Table.Limit = static_cast< uint16_t >( sizeof( GDT_ENTRY ) * NUMBER_OF_GDT_DESCRIPTORS - 1 );
+
+	return S_OK;
+}
+
+/**
  * @brief Setup IDT
  *
  * @param Partition The VM partition
@@ -327,7 +412,7 @@ HRESULT WhSiSetupInterruptDescriptorTable( WHSE_PARTITION* Partition, WHSE_REGIS
 	// Allocate two pages, one for the IDT
 	//
 	PVOID idtHva = nullptr;
-	uintptr_t idtGva = 0xffff8000'00000000; // start of system space
+	uintptr_t idtGva = 0xffff8000'00001000;
 	size_t size = PAGE_SIZE;
 	auto hresult = WhSeAllocateGuestVirtualMemory( Partition, &idtHva, idtGva, &size, WHvMapGpaRangeFlagRead | WHvMapGpaRangeFlagWrite );
 	if ( FAILED( hresult ) )
@@ -335,9 +420,9 @@ HRESULT WhSiSetupInterruptDescriptorTable( WHSE_PARTITION* Partition, WHSE_REGIS
 
 	// The other one to trap ISR access
 	//
-	PVOID idtSubHva = nullptr;
-	uintptr_t idtSubGva = 0xffff8000'00001000; // start of system space + PAGE_SIZE
-	hresult = WhSeAllocateGuestVirtualMemory( Partition, &idtSubHva, idtSubGva, &size, WHvMapGpaRangeFlagRead | WHvMapGpaRangeFlagWrite );
+	PVOID idtTrapHva = nullptr;
+	uintptr_t idtTrapGva = 0xffff8000'00002000;
+	hresult = WhSeAllocateGuestVirtualMemory( Partition, &idtTrapHva, idtTrapGva, &size, WHvMapGpaRangeFlagRead | WHvMapGpaRangeFlagWrite );
 	if ( FAILED( hresult ) )
 		return hresult;
 
@@ -345,18 +430,18 @@ HRESULT WhSiSetupInterruptDescriptorTable( WHSE_PARTITION* Partition, WHSE_REGIS
 	// thus it will generate a memory access exception when trying to jump to the Interrupt
 	// Service Routine
 	//
-	hresult = WhSeFreeGuestVirtualMemory( Partition, idtSubHva, idtSubGva, size );
+	hresult = WhSeFreeGuestVirtualMemory( Partition, idtTrapHva, idtTrapGva, size );
 	if ( FAILED( hresult ) )
 		return hresult;
 
 	// Fill IDT
 	//
-	auto ptr = idtSubGva;
+	auto ptr = idtTrapGva;
 	auto idt = reinterpret_cast< PIDT_ENTRY >( idtHva );
-	for ( auto idx = 0; idx < NUMBER_OF_DESCRIPTORS; idx++ ) {
+	for ( auto idx = 0; idx < NUMBER_OF_IDT_DESCRIPTORS; idx++ ) {
 		auto entry = IDT_ENTRY {
 				.Low = static_cast< uint16_t >( ptr & UINT16_MAX ),
-				.Selector = 0x10, // Kernel CS index
+				.Selector = 0x0008, // Kernel CS index
 				.InterruptStackTable = 0,
 				.Attributes = MAKE_IDT_ATTRS( 0, 0b1110 ), // Make them traps
 				.Mid = static_cast< uint16_t >( ( ptr >> 16 ) & UINT16_MAX ),
@@ -368,10 +453,12 @@ HRESULT WhSiSetupInterruptDescriptorTable( WHSE_PARTITION* Partition, WHSE_REGIS
 		ptr += sizeof( decltype( ptr ) );
 	}
 
-	// Setup IDTR
+	// Load IDTR
 	//
 	Registers[ Idtr ].Table.Base = idtGva;
-	Registers[ Idtr ].Table.Limit = static_cast< uint16_t >( sizeof( IDT_ENTRY ) * NUMBER_OF_DESCRIPTORS - 1 );
+	Registers[ Idtr ].Table.Limit = static_cast< uint16_t >( sizeof( IDT_ENTRY ) * NUMBER_OF_IDT_DESCRIPTORS - 1 );
+
+	Partition->MemoryLayout.InterruptDescriptorTableVirtualAddress = idtTrapGva;
 
 	return S_OK;
 }

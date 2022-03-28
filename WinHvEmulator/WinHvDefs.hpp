@@ -255,12 +255,113 @@ typedef union _WHSE_EXIT_CALLBACKS {
 		WHSE_EXIT_USER_CANCELED_CALLBACK			UserCanceledCallback;
 	} u;
 
-	PVOID Callbacks[ WHSE_EXIT_CALLBACK_SLOT::NumberOfCallbacks ];
+	PVOID Callbacks[ NumberOfCallbacks ];
 } WHSE_EXIT_CALLBACKS, * PWHSE_EXIT_CALLBACKS;
 
 static_assert( sizeof( WHSE_EXIT_CALLBACKS::u ) == sizeof( uintptr_t ) * ( WHSE_EXIT_CALLBACK_SLOT::NumberOfCallbacks ), "Wrong WHSE_EXIT_CALLBACKS::u size" );
 static_assert( sizeof( WHSE_EXIT_CALLBACKS::Callbacks ) == sizeof( uintptr_t ) * ( WHSE_EXIT_CALLBACK_SLOT::NumberOfCallbacks ), "WHSE_EXIT_CALLBACKS::Callbacks size" );
 static_assert( sizeof( WHSE_EXIT_CALLBACKS::Callbacks ) == sizeof( WHSE_EXIT_CALLBACKS::u ), "Wrong WHSE_EXIT_CALLBACKS::Callbacks or WHSE_EXIT_CALLBACKS::u size" );
+
+typedef WHSE_CALLBACK_RETURNTYPE ( WHSECALLBACKAPI WHSE_ISR_CALLBACK )( _WHSE_PARTITION* Partition );
+
+/**
+ * @brief Enumeration to represent the virtual processor ISR callbacks
+ */
+enum WHSE_ISR_CALLBACK_SLOT : uint16_t {
+	DivideByZero,
+	Debug,
+	NonMaskableInterrupt,
+	Breakpoint,
+	Overflow,
+	BoundRangeExceeded,
+	InvalidOpcode,
+	DeviceNotAvailable,
+	DoubleFault,
+	LEGACY_CoprocessorSegmentOverrun,
+	InvalidTSS,
+	SegmentNotPresent,
+	StackSegmentFault,
+	GeneralProtectionFault,
+	PageFault,
+	RESERVED_Isr015,
+	x87FloatingPointException,
+	AlignmentCheck,
+	MachineCheck,
+	SimdFloatingPointException,
+	VirtualiuzationException,
+	ControlProtectionException,
+	RESERVED_Isr022,
+	RESERVED_Isr023,
+	RESERVED_Isr024,
+	RESERVED_Isr025,
+	RESERVED_Isr026,
+	RESERVED_Isr027,
+	HypervisorInjectionException,
+	VmmCommunicationException,
+	SecurityException,
+	RESERVED_Isr031,
+	Isr032, Isr033, Isr034, Isr035, Isr036, Isr037, Isr038, Isr039, Isr040, Isr041, Isr042, Isr043, Isr044, Isr045, Isr046, Isr047,
+	Isr048, Isr049, Isr050, Isr051, Isr052, Isr053, Isr054, Isr055, Isr056, Isr057, Isr058, Isr059, Isr060, Isr061, Isr062, Isr063,
+	Isr064, Isr065, Isr066, Isr067, Isr068, Isr069, Isr070, Isr071, Isr072, Isr073, Isr074, Isr075, Isr076, Isr077, Isr078, Isr079,
+	Isr080, Isr081, Isr082, Isr083, Isr084, Isr085, Isr086, Isr087, Isr088, Isr089, Isr090, Isr091, Isr092, Isr093, Isr094, Isr095,
+	Isr096, Isr097, Isr098, Isr099, Isr100, Isr101, Isr102, Isr103, Isr104, Isr105, Isr106, Isr107, Isr108, Isr109, Isr110, Isr111,
+	Isr112, Isr113, Isr114, Isr115, Isr116, Isr117, Isr118, Isr119, Isr120, Isr121, Isr122, Isr123, Isr124, Isr125, Isr126, Isr127,
+	Isr128, Isr129, Isr130, Isr131, Isr132, Isr133, Isr134, Isr135, Isr136, Isr137, Isr138, Isr139, Isr140, Isr141, Isr142, Isr143,
+	Isr144, Isr145, Isr146, Isr147, Isr148, Isr149, Isr150, Isr151, Isr152, Isr153, Isr154, Isr155, Isr156, Isr157, Isr158, Isr159,
+	Isr160, Isr161, Isr162, Isr163, Isr164, Isr165, Isr166, Isr167, Isr168, Isr169, Isr170, Isr171, Isr172, Isr173, Isr174, Isr175,
+	Isr176, Isr177, Isr178, Isr179, Isr180, Isr181, Isr182, Isr183, Isr184, Isr185, Isr186, Isr187, Isr188, Isr189, Isr190, Isr191,
+	Isr192, Isr193, Isr194, Isr195, Isr196, Isr197, Isr198, Isr199, Isr200, Isr201, Isr202, Isr203, Isr204, Isr205, Isr206, Isr207,
+	Isr208, Isr209, Isr210, Isr211, Isr212, Isr213, Isr214, Isr215, Isr216, Isr217, Isr218, Isr219, Isr220, Isr221, Isr222, Isr223,
+	Isr224, Isr225, Isr226, Isr227, Isr228, Isr229, Isr230, Isr231, Isr232, Isr233, Isr234, Isr235, Isr236, Isr237, Isr238, Isr239,
+	Isr240, Isr241, Isr242, Isr243, Isr244, Isr245, Isr246, Isr247, Isr248, Isr249, Isr250, Isr251, Isr252, Isr253, Isr254, Isr255,
+
+	NumberOfInterruptRoutines
+};
+
+/**
+ * @brief A structure to hold pointers to the virtual processor ISR callbacks
+ */
+typedef union _WHSE_ISR_CALLBACKS {
+	struct {
+		WHSE_ISR_CALLBACK DivideByZeroCallback;
+		WHSE_ISR_CALLBACK DebugCallback;
+		WHSE_ISR_CALLBACK NonMaskableInterruptCallback;
+		WHSE_ISR_CALLBACK BreakpointCallback;
+		WHSE_ISR_CALLBACK OverflowCallback;
+		WHSE_ISR_CALLBACK BoundRangeExceededCallback;
+		WHSE_ISR_CALLBACK InvalidOpcodeCallback;
+		WHSE_ISR_CALLBACK DeviceNotAvailableCallback;
+		WHSE_ISR_CALLBACK DoubleFaultCallback;
+		WHSE_ISR_CALLBACK LEGACY_CoprocessorSegmentOverrunCallback;
+		WHSE_ISR_CALLBACK InvalidTSSCallback;
+		WHSE_ISR_CALLBACK SegmentNotPresentCallback;
+		WHSE_ISR_CALLBACK StackSegmentFault;
+		WHSE_ISR_CALLBACK GeneralProtectionFaultCallback;
+		WHSE_ISR_CALLBACK PageFaultCallback;
+		WHSE_ISR_CALLBACK RESERVED_015;
+		WHSE_ISR_CALLBACK x87FloatingPointExceptionCallback;
+		WHSE_ISR_CALLBACK AlignmentCheckCallback;
+		WHSE_ISR_CALLBACK MachineCheckCallback;
+		WHSE_ISR_CALLBACK SimdFloatingPointExceptionCallback;
+		WHSE_ISR_CALLBACK VirtualizationExceptionCallback;
+		WHSE_ISR_CALLBACK ControlProtectionExceptionCallback;
+		WHSE_ISR_CALLBACK RESERVED_022;
+		WHSE_ISR_CALLBACK RESERVED_023;
+		WHSE_ISR_CALLBACK RESERVED_024;
+		WHSE_ISR_CALLBACK RESERVED_025;
+		WHSE_ISR_CALLBACK RESERVED_026;
+		WHSE_ISR_CALLBACK RESERVED_027;
+		WHSE_ISR_CALLBACK HypervisorInjectionExceptionCallback;
+		WHSE_ISR_CALLBACK VmmCommunicationExceptionCallback;
+		WHSE_ISR_CALLBACK SecurityExceptionCallback;
+		WHSE_ISR_CALLBACK RESERVED_31;
+	} u;
+
+	WHSE_ISR_CALLBACK Callbacks[ NumberOfInterruptRoutines ];
+} WHSE_ISR_CALLBACKS, * PWHSE_ISR_CALLBACKS;
+
+static_assert( sizeof( WHSE_ISR_CALLBACKS::u ) == sizeof( uintptr_t ) * ( WHSE_ISR_CALLBACK_SLOT::Isr032 ), "Wrong WHSE_ISR_CALLBACKS::u size" );
+static_assert( sizeof( WHSE_ISR_CALLBACKS::Callbacks ) == sizeof( uintptr_t ) * ( WHSE_ISR_CALLBACK_SLOT::NumberOfInterruptRoutines ), "WHSE_ISR_CALLBACKS::Callbacks size" );
 
 /**
  * @brief A structure to represent a partition
@@ -271,12 +372,14 @@ static_assert( sizeof( WHSE_EXIT_CALLBACKS::Callbacks ) == sizeof( WHSE_EXIT_CAL
  * The <MemoryLayout> holds the properties of the memory layout.
  * The <VirtualProcessor> holds the properties of a virtual processor.
  * The <ExitCallbacks> hold an array of pointers to the virtual processor exits callbacks.
+ * The <IsrCallbacks> hold an array of pointers to the virtual processor interrupt routines callbacks.
  */
 typedef struct _WHSE_PARTITION {
 	WHSE_PARTITION_HANDLE Handle;
 	WHSE_MEMORY_LAYOUT_DESC MemoryLayout;
 	WHSE_VIRTUAL_PROCESSOR VirtualProcessor;
 	WHSE_EXIT_CALLBACKS ExitCallbacks;
+	WHSE_ISR_CALLBACKS IsrCallbacks;
 } WHSE_PARTITION, * PWHSE_PARTITION;
 
 #endif // !WINHVDEFS_HPP
