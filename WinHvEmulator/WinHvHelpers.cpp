@@ -22,6 +22,14 @@ bool WhSeIsHypervisorPresent() {
 		return false;
 	}
 
+	hresult = ::WHvGetCapability( WHvCapabilityCodeExtendedVmExits, &capabilities, sizeof( decltype( capabilities ) ), &written );
+	if ( FAILED( hresult )
+		|| !capabilities.ExtendedVmExits.X64CpuidExit
+		|| !capabilities.ExtendedVmExits.X64MsrExit
+		|| !capabilities.ExtendedVmExits.X64RdtscExit ) {
+		return false;
+	}
+
 	return true;
 }
 

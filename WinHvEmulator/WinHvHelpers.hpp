@@ -20,4 +20,8 @@ uint32_t WHSEAPI WhSeGetLastError();
 //
 HRESULT WHSEAPI WhSeGetLastHresult();
 
+// An helper function to know if a virtual address is canonical
+//
+bool WhSeIsCanonicalAddress( uintptr_t VirtualAddress );
+
 #endif // !WINHVHELPERS_HPP
