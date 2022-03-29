@@ -30,13 +30,15 @@ typedef WHV_RUN_VP_EXIT_REASON WHSE_VP_EXIT_REASON;
 /**
  * @brief Enumeration describing the processor mode
  */
-enum PROCESSOR_MODE : uint8_t {
+enum WHSE_PROCESSOR_MODE : uint8_t {
 	None,
 	KernelMode,
 	UserMode,
 
 	NumberOfModes
 };
+
+typedef WHV_PROCESSOR_VENDOR WHSE_PROCESSOR_VENDOR;
 
 /**
  * @brief Enumeration to represent registers
@@ -107,7 +109,8 @@ using WHSE_REGISTERS = WHSE_REGISTER_VALUE[ g_registers_count ];
  */
 typedef struct _WHSE_VIRTUAL_PROCESSOR {
 	uint32_t Index;
-	PROCESSOR_MODE Mode;
+	WHSE_PROCESSOR_MODE Mode;
+	WHSE_PROCESSOR_VENDOR Vendor;
 	WHSE_VP_EXIT_CONTEXT ExitContext;
 	WHSE_REGISTERS Registers; // Must be last as it is an array
 } WHSE_VIRTUAL_PROCESSOR, * PWHSE_VIRTUAL_PROCESSOR;

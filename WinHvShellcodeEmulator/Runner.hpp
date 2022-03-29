@@ -17,7 +17,7 @@ typedef struct _RUN_OPTIONS {
 	uint8_t* Code;
 	size_t CodeSize;
 	uintptr_t BaseAddress;
-	PROCESSOR_MODE Mode;
+	WHSE_PROCESSOR_MODE Mode;
 } RUN_OPTIONS, * PRUN_OPTIONS;
 
 // Execute a shellcode through a virtual processor

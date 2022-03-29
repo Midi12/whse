@@ -101,10 +101,10 @@ bool ParseCommandLine( int argc, char* const argv[], RUN_OPTIONS& options ) {
 		}
 		else if ( option_->option == 'm' ) {
 			if ( !strcmp( option_->argument, "user" ) ) {
-				options.Mode = PROCESSOR_MODE::UserMode;
+				options.Mode = WHSE_PROCESSOR_MODE::UserMode;
 			}
 			else if ( !strcmp( option_->argument, "kernel" ) ) {
-				options.Mode = PROCESSOR_MODE::KernelMode;
+				options.Mode = WHSE_PROCESSOR_MODE::KernelMode;
 			}
 		}
 		else if ( option_->option == 'b' ) {
@@ -139,9 +139,9 @@ int main( int argc, char* const argv[], char* const envp[] ) {
 	if ( options.Code == nullptr || options.CodeSize == 0 )
 		EXIT_WITH_MESSAGE( "No shellcode data" );
 
-	if ( options.Mode == PROCESSOR_MODE::None ) {
+	if ( options.Mode == WHSE_PROCESSOR_MODE::None ) {
 		printf( "No processor mode specified, defaulting to 'UserMode'\n" );
-		options.Mode = PROCESSOR_MODE::UserMode;
+		options.Mode = WHSE_PROCESSOR_MODE::UserMode;
 	}
 
 	// Execute shellcode on a virtualized processor

@@ -10,14 +10,24 @@
  * @param Mode The processor mode
  * @return A result code
  */
-HRESULT WhSeCreateProcessor( WHSE_PARTITION* Partition, PROCESSOR_MODE Mode ) {
+HRESULT WhSeCreateProcessor( WHSE_PARTITION* Partition, WHSE_PROCESSOR_MODE Mode ) {
 	if ( Partition == nullptr )
 		return HRESULT_FROM_WIN32( ERROR_INVALID_PARAMETER );
 
 	auto vp = &Partition->VirtualProcessor;
 	vp->Index = 0;
 
-	auto hresult = ::WHvCreateVirtualProcessor( Partition->Handle, vp->Index, 0 );
+	auto capabilities = WHV_CAPABILITY { 0 };
+	uint32_t written = 0;
+
+	auto hresult = ::WHvGetCapability( WHvCapabilityCodeProcessorVendor, &capabilities, sizeof( decltype( capabilities ) ), &written );
+	if ( FAILED( hresult ) ) {
+		return hresult;
+	}
+
+	vp->Vendor = capabilities.ProcessorVendor;
+
+	hresult = ::WHvCreateVirtualProcessor( Partition->Handle, vp->Index, 0 );
 	if ( FAILED( hresult ) )
 		return hresult;
 
@@ -36,7 +46,7 @@ HRESULT WhSeCreateProcessor( WHSE_PARTITION* Partition, PROCESSOR_MODE Mode ) {
 	int dataSelector;
 
 	switch ( Mode ) {
-		using enum PROCESSOR_MODE;
+		using enum WHSE_PROCESSOR_MODE;
 	case UserMode:
 		lowestAddress = 0x00000000'00000000;
 		highestAddress = 0x00008000'00000000 - 64KiB;
