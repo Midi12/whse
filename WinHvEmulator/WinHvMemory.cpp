@@ -114,6 +114,16 @@ HRESULT WHSEAPI WhSeMapHostToGuestPhysicalMemory( WHSE_PARTITION* Partition, PVO
 	if ( HostVa == nullptr )
 		return HRESULT_FROM_WIN32( ERROR_INVALID_PARAMETER );
 
+	WHSE_ALLOCATION_NODE node {
+		.GuestPhysicalAddress = GuestPa,
+		.HostVirtualAddress = HostVa,
+		.Size = Size
+	};
+
+	auto hresult = WhSeInsertAllocationTrackingNode( Partition, node );
+	if ( FAILED( hresult ) )
+		return hresult;
+
 	// Map the memory range into the guest physical address space
 	//
 	return ::WHvMapGpaRange( Partition->Handle, HostVa, static_cast< WHV_GUEST_PHYSICAL_ADDRESS >( GuestPa ), ALIGN_UP( Size ), Flags );
@@ -235,6 +245,18 @@ HRESULT WHSEAPI WhSeMapHostToGuestVirtualMemory( WHSE_PARTITION* Partition, PVOI
 
 	uintptr_t gpa { };
 	hresult = WhSeTranslateGvaToGpa( Partition, startingGva, &gpa, nullptr );
+	if ( FAILED( hresult ) )
+		return hresult;
+
+
+	WHSE_ALLOCATION_NODE node {
+		.GuestVirtualAddress = reinterpret_cast< PVOID >( GuestVa ),
+		.GuestPhysicalAddress = gpa,
+		.HostVirtualAddress = HostVa,
+		.Size = Size
+	};
+
+	hresult = WhSeInsertAllocationTrackingNode( Partition, node );
 	if ( FAILED( hresult ) )
 		return hresult;
 
