@@ -1,3 +1,4 @@
+#include "DoubleLinkedList.hpp"
 #include "WinHvAllocationTracker.hpp"
 #include "WinHvMemory.hpp"
 
@@ -11,14 +12,15 @@
 HRESULT WhSeInitializeAllocationTracker( WHSE_PARTITION* Partition ) {
 	if ( Partition == nullptr )
 		return HRESULT_FROM_WIN32( PEERDIST_ERROR_NOT_INITIALIZED );
-
+	
 	// Initialize address space allocations tracking
 	//
-	PSLIST_HEADER tracker = reinterpret_cast< PSLIST_HEADER >( ::HeapAlloc( ::GetProcessHeap(), HEAP_ZERO_MEMORY, sizeof( decltype( *tracker ) ) ) );
+	PDLIST_HEADER tracker = reinterpret_cast< PDLIST_HEADER >( malloc( sizeof( decltype( *tracker ) ) ) );
 	if ( tracker == nullptr )
 		return HRESULT_FROM_WIN32( ERROR_OUTOFMEMORY );
 
-	::InitializeSListHead( tracker );
+	InitializeDListHeader( tracker );
+
 	Partition->MemoryLayout.AllocationTracker = tracker;
 
 	return S_OK;
@@ -39,7 +41,7 @@ HRESULT WhSeFreeAllocationTracker( WHSE_PARTITION* Partition ) {
 		return HRESULT_FROM_WIN32( PEERDIST_ERROR_NOT_INITIALIZED );
 
 
-	auto first = reinterpret_cast< WHSE_ALLOCATION_NODE* >( ::RtlFirstEntrySList( tracker ) );
+	auto first = reinterpret_cast< WHSE_ALLOCATION_NODE* >( GetDListHead( tracker ) );
 	if ( first == nullptr )
 		return HRESULT_FROM_WIN32( ERROR_NO_MORE_ITEMS );
 
@@ -47,17 +49,17 @@ HRESULT WhSeFreeAllocationTracker( WHSE_PARTITION* Partition ) {
 	//
 	auto current = first;
 	while ( current != nullptr ) {
-		if ( current->GuestPhysicalAddress != 0 && current->GuestVirtualAddress == nullptr )
+		if ( current->GuestPhysicalAddress != 0 && current->GuestVirtualAddress == 0 )
 			WhSeFreeGuestPhysicalMemory( Partition, current->HostVirtualAddress, current->GuestPhysicalAddress, current->Size );
-		else if ( current->GuestPhysicalAddress != 0 && current->GuestVirtualAddress != nullptr )
-			WhSeFreeGuestVirtualMemory( Partition, current->HostVirtualAddress, reinterpret_cast< uintptr_t >( current->GuestVirtualAddress ), current->Size );
+		else if ( current->GuestPhysicalAddress != 0 && current->GuestVirtualAddress != 0 )
+			WhSeFreeGuestVirtualMemory( Partition, current->HostVirtualAddress, current->GuestVirtualAddress, current->Size );
 		else
 			DebugBreak();
 
 		current = reinterpret_cast< WHSE_ALLOCATION_NODE* >( current->Next );
 	}
 
-	::RtlInterlockedFlushSList( tracker );
+	FlushDList( tracker );
 
 	return S_OK;
 }
@@ -84,7 +86,7 @@ HRESULT WhSeFindAllocationNode( WHSE_PARTITION* Partition, WHSE_ALLOCATION_TRACK
 	if ( tracker == nullptr )
 		return HRESULT_FROM_WIN32( PEERDIST_ERROR_NOT_INITIALIZED );
 
-	auto first = reinterpret_cast< WHSE_ALLOCATION_NODE* >( ::RtlFirstEntrySList( tracker ) );
+	auto first = reinterpret_cast< WHSE_ALLOCATION_NODE* >( GetDListHead( tracker ) );
 	if ( first == nullptr )
 		return HRESULT_FROM_WIN32( ERROR_NO_MORE_ITEMS );
 
@@ -100,7 +102,7 @@ HRESULT WhSeFindAllocationNode( WHSE_PARTITION* Partition, WHSE_ALLOCATION_TRACK
 		current = reinterpret_cast< WHSE_ALLOCATION_NODE* >( current->Next );
 	}
 
-	return HRESULT_FROM_WIN32( *Node != nullptr ? S_OK : ERROR_NOT_FOUND );
+	return *Node != nullptr ? S_OK : HRESULT_FROM_WIN32( ERROR_NOT_FOUND );
 }
 
 /**
@@ -125,7 +127,7 @@ HRESULT WhSeFindAllocationNodeByGva( WHSE_PARTITION* Partition, uintptr_t GuestV
 	if ( tracker == nullptr )
 		return HRESULT_FROM_WIN32( PEERDIST_ERROR_NOT_INITIALIZED );
 
-	auto first = reinterpret_cast< WHSE_ALLOCATION_NODE* >( ::RtlFirstEntrySList( tracker ) );
+	auto first = reinterpret_cast< WHSE_ALLOCATION_NODE* >( GetDListHead( tracker ) );
 	if ( first == nullptr )
 		return HRESULT_FROM_WIN32( ERROR_NO_MORE_ITEMS );
 
@@ -133,7 +135,7 @@ HRESULT WhSeFindAllocationNodeByGva( WHSE_PARTITION* Partition, uintptr_t GuestV
 	//
 	auto current = first;
 	while ( current != nullptr ) {
-		if ( current->GuestVirtualAddress == reinterpret_cast< PVOID >( GuestVa ) ) {
+		if ( current->GuestVirtualAddress == GuestVa ) {
 			*Node = current;
 			break;
 		}
@@ -166,7 +168,7 @@ HRESULT WhSeFindAllocationNodeByGpa( WHSE_PARTITION* Partition, uintptr_t GuestP
 	if ( tracker == nullptr )
 		return HRESULT_FROM_WIN32( PEERDIST_ERROR_NOT_INITIALIZED );
 
-	auto first = reinterpret_cast< WHSE_ALLOCATION_NODE* >( ::RtlFirstEntrySList( tracker ) );
+	auto first = reinterpret_cast< WHSE_ALLOCATION_NODE* >( GetDListHead( tracker ) );
 	if ( first == nullptr )
 		return HRESULT_FROM_WIN32( ERROR_NO_MORE_ITEMS );
 
@@ -194,13 +196,13 @@ HRESULT WhSeFindAllocationNodeByGpa( WHSE_PARTITION* Partition, uintptr_t GuestP
  */
 HRESULT WHSEAPI WhSeInsertAllocationTrackingNode( WHSE_PARTITION* Partition, WHSE_ALLOCATION_NODE Node )
 {
-	WHSE_ALLOCATION_NODE* node = reinterpret_cast< WHSE_ALLOCATION_NODE* >( ::HeapAlloc( ::GetProcessHeap(), HEAP_ZERO_MEMORY, sizeof( decltype( *node ) ) ) );
+	WHSE_ALLOCATION_NODE* node = reinterpret_cast< WHSE_ALLOCATION_NODE* >( malloc( sizeof( decltype( *node ) ) ) );
 	if ( node == nullptr )
 		return HRESULT_FROM_WIN32( ERROR_OUTOFMEMORY );
 
 	memcpy_s( node, sizeof( decltype( *node ) ), &Node, sizeof( decltype( Node ) ) );
 
-	::InterlockedPushEntrySList( Partition->MemoryLayout.AllocationTracker, node );
+	::PushBackDListEntry( Partition->MemoryLayout.AllocationTracker, node );
 
 	return S_OK;
 }

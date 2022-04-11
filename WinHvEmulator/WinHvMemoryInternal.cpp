@@ -83,21 +83,19 @@ HRESULT WhSiGetNextPhysicalPage( WHSE_PARTITION* Partition, uintptr_t* PhysicalP
  * @param Flags
  * @return A result code
  */
-HRESULT WhSiAllocateGuestPhysicalMemory( WHSE_PARTITION* Partition, PVOID* HostVa, uintptr_t* GuestPa, size_t* Size, WHSE_MEMORY_ACCESS_FLAGS Flags ) {
+HRESULT WhSiAllocateGuestPhysicalMemory( WHSE_PARTITION* Partition, uintptr_t* HostVa, uintptr_t* GuestPa, size_t Size, WHSE_MEMORY_ACCESS_FLAGS Flags ) {
 	uintptr_t physicalAddress = 0;
 	auto hresult = WhSiGetNextPhysicalPage( Partition, &physicalAddress );
 	if ( FAILED( hresult ) )
 		return hresult;
 
-	PVOID hostVa = nullptr;
-	size_t size = ALIGN_UP( *Size );
-	hresult = WhSeAllocateGuestPhysicalMemory( Partition, &hostVa, physicalAddress, &size, Flags );
+	uintptr_t hostVa = 0;
+	hresult = WhSeAllocateGuestPhysicalMemory( Partition, &hostVa, physicalAddress, Size, Flags );
 	if ( FAILED( hresult ) )
 		return hresult;
 
 	*HostVa = hostVa;
 	*GuestPa = physicalAddress;
-	*Size = size;
 
 	return S_OK;
 }
@@ -112,15 +110,14 @@ HRESULT WhSiAllocateGuestPhysicalMemory( WHSE_PARTITION* Partition, PVOID* HostV
 HRESULT WhSiSetupPaging( WHSE_PARTITION* Partition, uintptr_t* Pml4PhysicalAddress ) {
 	// Check if already initialized
 	//
-	if ( Partition->MemoryLayout.Pml4HostVa != nullptr )
+	if ( Partition->MemoryLayout.Pml4HostVa != 0 )
 		return HRESULT_FROM_WIN32( ERROR_ALREADY_INITIALIZED );
 
 	// Allocate PML4 on physical memory
 	//
 	uintptr_t pml4Gpa = 0;
-	PVOID pml4Hva = nullptr;
-	size_t size = PAGE_SIZE;
-	auto hresult = WhSiAllocateGuestPhysicalMemory( Partition, &pml4Hva, &pml4Gpa, &size, WHvMapGpaRangeFlagRead | WHvMapGpaRangeFlagWrite );
+	uintptr_t pml4Hva = 0;
+	auto hresult = WhSiAllocateGuestPhysicalMemory( Partition, &pml4Hva, &pml4Gpa, PAGE_SIZE, WHvMapGpaRangeFlagRead | WHvMapGpaRangeFlagWrite );
 	if ( FAILED( hresult ) )
 		return hresult;
 
@@ -177,7 +174,7 @@ HRESULT WhSiInsertPageTableEntry( WHSE_PARTITION* Partition, uintptr_t VirtualAd
 	
 	// Search entry in Page Directory Pointers
 	// 
-	PVOID pdpHva = nullptr;
+	uintptr_t pdpHva = 0;
 	hresult = WhSpLookupHVAFromPFN( Partition, pml4e.PageFrameNumber, &pdpHva );
 	if ( FAILED( hresult ) )
 		return hresult;
@@ -201,7 +198,7 @@ HRESULT WhSiInsertPageTableEntry( WHSE_PARTITION* Partition, uintptr_t VirtualAd
 
 	// Search entry in Page Directories
 	//
-	PVOID pdHva = nullptr;
+	uintptr_t pdHva = 0;
 	hresult = WhSpLookupHVAFromPFN( Partition, pdpe.PageFrameNumber, &pdHva );
 	if ( FAILED( hresult ) )
 		return hresult;
@@ -225,7 +222,7 @@ HRESULT WhSiInsertPageTableEntry( WHSE_PARTITION* Partition, uintptr_t VirtualAd
 
 	// Add entry in Page Tables
 	//
-	PVOID ptHva = nullptr;
+	uintptr_t ptHva = 0;
 	hresult = WhSpLookupHVAFromPFN( Partition, pde.PageFrameNumber, &ptHva );
 	if ( FAILED( hresult ) )
 		return hresult;
@@ -275,7 +272,7 @@ HRESULT WhSiFindBestGVA( WHSE_PARTITION* Partition, uintptr_t* GuestVa, size_t S
 	if ( tracker == nullptr )
 		return HRESULT_FROM_WIN32( PEERDIST_ERROR_NOT_INITIALIZED );
 
-	auto first = reinterpret_cast< WHSE_ALLOCATION_NODE* >( ::RtlFirstEntrySList( tracker ) );
+	auto first = reinterpret_cast< WHSE_ALLOCATION_NODE* >( GetDListHead( tracker ) );
 	if ( first == nullptr )
 		return HRESULT_FROM_WIN32( ERROR_NO_MORE_ITEMS );
 
@@ -283,7 +280,7 @@ HRESULT WhSiFindBestGVA( WHSE_PARTITION* Partition, uintptr_t* GuestVa, size_t S
 	size_t highestExistingGvaSize = 0;
 	auto current = first;
 	while ( current != nullptr ) {
-		uintptr_t currentGva = reinterpret_cast< uintptr_t >( current->GuestVirtualAddress );
+		uintptr_t currentGva = current->GuestVirtualAddress;
 		if ( currentGva > highestExistingGva ) {
 			highestExistingGva = currentGva;
 		}
@@ -324,12 +321,11 @@ HRESULT WhSiSetupGlobalDescriptorTable( WHSE_PARTITION* Partition, WHSE_REGISTER
 	if ( Registers == nullptr )
 		return HRESULT_FROM_WIN32( ERROR_INVALID_PARAMETER );
 
-	// Allocate a page for the GDT
+	// Allocate GDT
 	//
-	PVOID gdtHva = nullptr;
+	uintptr_t gdtHva = 0;
 	uintptr_t gdtGva = 0xffff8000'00000000;
-	size_t size = PAGE_SIZE;
-	auto hresult = WhSeAllocateGuestVirtualMemory( Partition, &gdtHva, gdtGva, &size, WHvMapGpaRangeFlagRead | WHvMapGpaRangeFlagWrite );
+	auto hresult = WhSeAllocateGuestVirtualMemory( Partition, &gdtHva, gdtGva, PAGE_SIZE, WHvMapGpaRangeFlagRead | WHvMapGpaRangeFlagWrite );
 	if ( FAILED( hresult ) )
 		return hresult;
 
@@ -363,6 +359,23 @@ HRESULT WhSiSetupGlobalDescriptorTable( WHSE_PARTITION* Partition, WHSE_REGISTER
 	if ( FAILED( hresult ) )
 		return hresult;
 
+	// Allocate a page for the TSS
+	//
+	uintptr_t tssHva = 0;
+	uintptr_t tssGva = 0xffffa000'00000000;
+	hresult = WhSeAllocateGuestVirtualMemory( Partition, &tssHva, tssGva, sizeof( X64_TASK_STATE_SEGMENT ), WHvMapGpaRangeFlagRead | WHvMapGpaRangeFlagWrite );
+	if ( FAILED( hresult ) )
+		return hresult;
+
+	hresult = WhSpInitializeTss( Partition, reinterpret_cast< PX64_TASK_STATE_SEGMENT >( tssHva ) );
+	if ( FAILED( hresult ) )
+		return hresult;
+
+	X64_TSS_ENTRY tssSegmentDesc { 0 };
+	hresult = WhSpCreateTssEntry( &tssSegmentDesc, tssGva, sizeof( X64_TSS_ENTRY ), 0x89, 0x00 );
+	if ( FAILED( hresult ) )
+		return hresult;
+
 	// Load the temp descriptors in memory
 	//
 	auto gdt = reinterpret_cast< PGDT_ENTRY >( gdtHva );
@@ -387,10 +400,18 @@ HRESULT WhSiSetupGlobalDescriptorTable( WHSE_PARTITION* Partition, WHSE_REGISTER
 	//
 	gdt[ 4 ] = userModeDataSegmentDesc;
 
+	// Offset : 0x0028	Use : 64-bit Task State Segment
+	//
+	*( PX64_TSS_ENTRY ) ( &( gdt[ 5 ] ) ) = tssSegmentDesc;
+
 	// Load GDTR
 	//
 	Registers[ Gdtr ].Table.Base = gdtGva;
-	Registers[ Gdtr ].Table.Limit = static_cast< uint16_t >( sizeof( GDT_ENTRY ) * NUMBER_OF_GDT_DESCRIPTORS - 1 );
+	Registers[ Gdtr ].Table.Limit = static_cast< uint16_t >( sizeof( X64_TSS_ENTRY ) + ( sizeof( GDT_ENTRY ) * NUMBER_OF_GDT_DESCRIPTORS - 1 ) );
+
+	// Load TR
+	//
+	Registers[ Tr ].Segment.Selector = 0x0028;
 
 	return S_OK;
 }
@@ -411,18 +432,17 @@ HRESULT WhSiSetupInterruptDescriptorTable( WHSE_PARTITION* Partition, WHSE_REGIS
 
 	// Allocate two pages, one for the IDT
 	//
-	PVOID idtHva = nullptr;
+	uintptr_t idtHva = 0;
 	uintptr_t idtGva = 0xffff8000'00001000;
-	size_t size = PAGE_SIZE;
-	auto hresult = WhSeAllocateGuestVirtualMemory( Partition, &idtHva, idtGva, &size, WHvMapGpaRangeFlagRead | WHvMapGpaRangeFlagWrite );
+	auto hresult = WhSeAllocateGuestVirtualMemory( Partition, &idtHva, idtGva, PAGE_SIZE, WHvMapGpaRangeFlagRead | WHvMapGpaRangeFlagWrite );
 	if ( FAILED( hresult ) )
 		return hresult;
 
 	// The other one to trap ISR access
 	//
-	PVOID idtTrapHva = nullptr;
+	uintptr_t idtTrapHva = 0;
 	uintptr_t idtTrapGva = 0xffff8000'00002000;
-	hresult = WhSeAllocateGuestVirtualMemory( Partition, &idtTrapHva, idtTrapGva, &size, WHvMapGpaRangeFlagRead | WHvMapGpaRangeFlagWrite );
+	hresult = WhSeAllocateGuestVirtualMemory( Partition, &idtTrapHva, idtTrapGva, PAGE_SIZE, WHvMapGpaRangeFlagRead | WHvMapGpaRangeFlagWrite );
 	if ( FAILED( hresult ) )
 		return hresult;
 
@@ -430,7 +450,7 @@ HRESULT WhSiSetupInterruptDescriptorTable( WHSE_PARTITION* Partition, WHSE_REGIS
 	// thus it will generate a memory access exception when trying to jump to the Interrupt
 	// Service Routine
 	//
-	hresult = WhSeFreeGuestVirtualMemory( Partition, idtTrapHva, idtTrapGva, size );
+	hresult = WhSeFreeGuestVirtualMemory( Partition, idtTrapHva, idtTrapGva, PAGE_SIZE );
 	if ( FAILED( hresult ) )
 		return hresult;
 

@@ -38,7 +38,7 @@ HRESULT WhSeCreatePartition( WHSE_PARTITION** Partition ) {
 
 	// Allocate the partition structure
 	//
-	*Partition = reinterpret_cast< WHSE_PARTITION* >( ::HeapAlloc( ::GetProcessHeap(), HEAP_ZERO_MEMORY, sizeof( decltype( **Partition ) ) ) );
+	*Partition = reinterpret_cast< WHSE_PARTITION* >( malloc( sizeof( decltype( **Partition ) ) ) );
 
 	if ( *Partition == nullptr ) {
 		// Allocation failed
@@ -98,7 +98,7 @@ HRESULT WhSeDeletePartition( WHSE_PARTITION** Partition ) {
 		partition->Handle = nullptr;
 	}
 
-	::HeapFree( ::GetProcessHeap(), 0, partition );
+	free( partition );
 	*Partition = nullptr;
 
 	return hresult;

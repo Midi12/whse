@@ -4,16 +4,20 @@
 [x] Private api in their own file
 [x] Tracker api in their own file
 [x] Kernel/User mode when creating the processor
-[ ] Handle page fault/gp exception/... through custom GDT+IDT
-[ ] Memory management through memory block
+[x] Handle page fault/gp exception/... through custom GDT+IDT
+[ ] Memory management through memory block 
+[ ] Add TSS
+[ ] Handle syscalls
 [ ] New shellcode for debug -> test all callbacks
 [ ] Check all code path for clean memory handling
+[ ] Recode all in pure C (cross platform: MSVC, Clang)
+	[ ] Add error handling for the doubly linked list api
 [ ] Benchmarks
-	[ ] Find C (or a C++ with C style interface) Benchmark library
+	[ ] Find C Benchmark library
 [ ] Documentation
 	[x] Find a documentation support : DOXYGEN
 	[x] Write documentation inside code
 	[ ] Make a github action to generate the doc
 [ ] Unit tests
-	[ ] Find C (or a C++ with C style interface) Unit Testing library
+	[ ] Find C Unit Testing library
 [ ] Add babama to the credits for his greatness in private messages

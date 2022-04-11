@@ -26,67 +26,16 @@ constexpr size_t ALIGN_UP( size_t x ) {
 
 bool OnMemoryAccessExit( _WHSE_PARTITION* Partition, WHV_VP_EXIT_CONTEXT* VpContext, WHSE_MEMORY_ACCESS_CONTEXT* ExitContext ) {
 	printf( "HandleMemoryAccessExit" );
-
-	// Fix the VA
-	//
-	PVOID hva = nullptr;
-	size_t size = PAGE_SIZE;
-	auto hresult = WhSeAllocateGuestVirtualMemory( Partition, &hva, ExitContext->Gva, &size, WHvMapGpaRangeFlagRead | WHvMapGpaRangeFlagWrite );
-	if ( FAILED( hresult ) )
-		return false;
-
-	// Ask to retry the current instruction
-	//
 	return true;
 }
 
 bool OnIoPortAccessExit( _WHSE_PARTITION* Partition, WHV_VP_EXIT_CONTEXT* VpContext, WHSE_IO_PORT_ACCESS_CONTEXT* ExitContext ) {
 	printf( "IoPortAccessCallback" );
-
-	// Get a pointer to registers
-	//
-	auto registers = Partition->VirtualProcessor.Registers;
-
-	// Check which instruction is currently executed
-	//
-	auto port = ExitContext->PortNumber;
-	if ( ExitContext->AccessInfo.IsWrite == 0 && port == 0x1f0 ) {
-		// EC	IN AL,DX	Input byte from I/O port in DX into AL.
-		//
-		registers[ Rax ].Reg64 = static_cast< uint8_t >( 0x12 );
-	} else if ( ExitContext->AccessInfo.IsWrite == 1 && port == 0x1f0 ) {
-		// EE	OUT DX, AL	Output byte in AL to I/O port address in DX.
-		//
-		registers[ Rax ].Reg64 = static_cast< uint8_t >( 0x1337 );
-	}
-	else
-		return false;
-
-	// Adjust rip ( ONLY FOR TEST )
-	registers[ Rip ].Reg64 += 1;
-
-	if ( FAILED( WhSeSetProcessorRegisters( Partition, registers ) ) )
-		return false;
-
 	return true;
 }
 
 bool OnUnrecoverableExceptionExit( _WHSE_PARTITION* Partition, WHV_VP_EXIT_CONTEXT* VpContext, WHSE_UNRECOVERABLE_EXCEPTION_CONTEXT* ExitContext ) {
 	printf( "UnrecoverableExceptionCallback" );
-
-	auto idtr = Partition->VirtualProcessor.Registers[ Idtr ].Table;
-
-	WHSE_ALLOCATION_NODE* node = nullptr;
-	auto hresult = WhSeFindAllocationNodeByGva(Partition, idtr.Base, &node);
-	if ( FAILED( hresult ) )
-		return true;
-
-	uintptr_t gpa;
-	WHV_TRANSLATE_GVA_RESULT tr { };
-	hresult = WhSeTranslateGvaToGpa( Partition, reinterpret_cast< uintptr_t >( node->GuestVirtualAddress ) + 0x1000, &gpa, &tr );
-	if ( FAILED( hresult ) )
-		return true;
-
 	return false;
 }
 
@@ -162,6 +111,10 @@ bool OnPageFault( WHSE_PARTITION* Partition ) {
 	return true;
 }
 
+bool OnGeneralProtectionFault( WHSE_PARTITION* Partition ) {
+	return true;
+}
+
 // Execute a shellcode through a virtual processor
 //
 DWORD WINAPI ExecuteThread( LPVOID lpParameter ) {
@@ -206,6 +159,7 @@ DWORD WINAPI ExecuteThread( LPVOID lpParameter ) {
 	// Set Page Fault callback
 	//
 	partition->IsrCallbacks.u.PageFaultCallback = &OnPageFault;
+	partition->IsrCallbacks.u.GeneralProtectionFaultCallback = &OnGeneralProtectionFault;
 
 	// *---------------*
 	// | START TESTING |
@@ -244,10 +198,10 @@ DWORD Cleanup( WHSE_PARTITION** Partition ) {
 	// Release the backing memory from the PML4 directory
 	//
 	auto pml4Hva = ( *Partition )->MemoryLayout.Pml4HostVa;
-	if ( pml4Hva == nullptr )
+	if ( pml4Hva == 0 )
 		EXIT_WITH_MESSAGE( "No PML4 HVA" );
 
-	::VirtualFree( pml4Hva, 0, MEM_RELEASE );
+	::VirtualFree( reinterpret_cast< PVOID >( pml4Hva ), 0, MEM_RELEASE );
 
 	// Delete the processor
 	//
@@ -293,10 +247,10 @@ DWORD WINAPI Run( const RUN_OPTIONS& options ) {
 	
 	// Allocate stack
 	//
-	PVOID stackHva = nullptr;
+	uintptr_t stackHva = 0;
 	constexpr uintptr_t stackGva = 0x00007FFF'00000000 - 0x1000000;
 	size_t stackSize = 1 * 1024 * 1024;
-	if ( FAILED( WhSeAllocateGuestVirtualMemory( partition, &stackHva, stackGva, &stackSize, WHvMapGpaRangeFlagRead | WHvMapGpaRangeFlagWrite ) ) )
+	if ( FAILED( WhSeAllocateGuestVirtualMemory( partition, &stackHva, stackGva, stackSize, WHvMapGpaRangeFlagRead | WHvMapGpaRangeFlagWrite ) ) )
 		EXIT_WITH_MESSAGE( "Failed to allocate stack" );
 
 	printf( "Allocated stack space %llx (size = %llx)\n", static_cast< unsigned long long >( stackGva ), static_cast< unsigned long long >( stackSize ) );
@@ -310,7 +264,7 @@ DWORD WINAPI Run( const RUN_OPTIONS& options ) {
 	::CopyMemory( shellcode, options.Code, options.CodeSize );
 
 	uintptr_t codeGva = options.BaseAddress != 0 ? options.BaseAddress : 0x10000;
-	if( FAILED( WhSeMapHostToGuestVirtualMemory( partition, shellcode, codeGva, ALIGN_UP( options.CodeSize ), WHvMapGpaRangeFlagRead | WHvMapGpaRangeFlagWrite | WHvMapGpaRangeFlagExecute ) ) )
+	if ( FAILED( WhSeMapHostToGuestVirtualMemory( partition, reinterpret_cast< uintptr_t >( shellcode ), codeGva, ALIGN_UP( options.CodeSize ), WHvMapGpaRangeFlagRead | WHvMapGpaRangeFlagWrite | WHvMapGpaRangeFlagExecute ) ) )
 		EXIT_WITH_MESSAGE( "Failed to map shellcode" );
 
 	printf( "Allocated code memory %llx (size = %llx, allocated = %llx)\n", static_cast< unsigned long long >( codeGva ), static_cast< unsigned long long >( options.CodeSize ), static_cast< unsigned long long >( ALIGN_UP( options.CodeSize ) ) );

@@ -20,6 +20,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="dllmain.cpp" />
+    <ClCompile Include="DoubleLinkedList.cpp" />
     <ClCompile Include="WinHvAllocationTracker.cpp" />
     <ClCompile Include="WinHvCallbacks.cpp" />
     <ClCompile Include="WinHvHelpers.cpp" />
@@ -30,6 +31,7 @@
     <ClCompile Include="WinHvProcessor.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="DoubleLinkedList.hpp" />
     <ClInclude Include="WinHvAllocationTracker.hpp" />
     <ClInclude Include="WinHvCallbacks.hpp" />
     <ClInclude Include="WinHvMemoryInternal.hpp" />

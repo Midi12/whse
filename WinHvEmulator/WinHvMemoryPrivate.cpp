@@ -1,6 +1,7 @@
 #include "WinHvMemoryPrivate.hpp"
 #include "WinHvUtils.hpp"
 #include "WinHvAllocationTracker.hpp"
+#include "WinHvMemory.hpp"
 
 /**
  * @brief Private api
@@ -12,10 +13,9 @@
  */
 HRESULT WhSpInsertPageTableEntry( WHSE_PARTITION* Partition, PMMPTE_HARDWARE ParentLayer, uint16_t Index ) {
 	uintptr_t gpa = 0;
-	PVOID hva = nullptr;
-	size_t size = PAGE_SIZE;
+	uintptr_t hva = 0;
 
-	auto hresult = WhSiAllocateGuestPhysicalMemory( Partition, &hva, &gpa, &size, WHvMapGpaRangeFlagRead | WHvMapGpaRangeFlagWrite );
+	auto hresult = WhSiAllocateGuestPhysicalMemory( Partition, &hva, &gpa, PAGE_SIZE, WHvMapGpaRangeFlagRead | WHvMapGpaRangeFlagWrite );
 	if ( FAILED( hresult ) )
 		return hresult;
 
@@ -42,7 +42,7 @@ HRESULT WhSpInsertPageTableEntry( WHSE_PARTITION* Partition, PMMPTE_HARDWARE Par
  * @param HostVa
  * @return A result code
  */
-HRESULT WhSpLookupHVAFromPFN( WHSE_PARTITION* Partition, uintptr_t PageFrameNumber, PVOID* HostVa ) {
+HRESULT WhSpLookupHVAFromPFN( WHSE_PARTITION* Partition, uintptr_t PageFrameNumber, uintptr_t* HostVa ) {
 	WHSE_ALLOCATION_NODE* node = nullptr;
 	auto hresult = WhSeFindAllocationNodeByGpa( Partition, PageFrameNumber * PAGE_SIZE, &node );
 	if ( FAILED( hresult ) )
@@ -74,6 +74,55 @@ HRESULT WhSpCreateGdtEntry( GDT_ENTRY* Entry, uintptr_t Base, ptrdiff_t Limit, u
 	Entry->LimitHigh = static_cast< uint8_t >( ( Limit >> 16 ) & 0xf );
 	Entry->Flags = static_cast< uint8_t >( Flags & 0xf );
 	Entry->BaseHigh = static_cast< uint8_t >( ( Base >> 24 ) & 0xff );
+
+	return S_OK;
+}
+
+/**
+ * @brief Private api
+ *
+ * @param TssSegmentDesc The returned TSS entry
+ * @param Base
+ * @param Limit
+ * @param Access
+ * @param Flags
+ * @return A result code
+ */
+HRESULT WhSpCreateTssEntry( X64_TSS_ENTRY* TssSegmentDesc, uintptr_t Base, ptrdiff_t Limit, uint8_t Access, uint8_t Flags ) {
+	if ( TssSegmentDesc == nullptr )
+		return HRESULT_FROM_WIN32( ERROR_INVALID_PARAMETER );
+
+	auto hresult = WhSpCreateGdtEntry( &( TssSegmentDesc->GdtEntry ), Base, Limit, Access, Flags );
+	if ( FAILED( hresult ) )
+		return hresult;
+
+	TssSegmentDesc->BaseHigh = ( Base >> 32 ) & UINT32_MAX;
+
+	return S_OK;
+}
+
+/**
+ * @brief Private api
+ *
+ * @param Tss Pointer to the Task State Segment
+ * @return A result code
+ */
+HRESULT WhSpInitializeTss( WHSE_PARTITION* Partition, PX64_TASK_STATE_SEGMENT Tss ) {
+	if ( Tss == nullptr )
+		return HRESULT_FROM_WIN32( ERROR_INVALID_PARAMETER );
+
+	for ( auto i = 0; i < X64_TASK_STATE_SEGMENT_NUMBER_OF_SPS; i++ ) {
+		uintptr_t stackHva = 0;
+		size_t stackSize = 1MiB;
+		uintptr_t stackGva = 0xffffb000'00000000 + ( i * stackSize );
+		auto hresult = WhSeAllocateGuestVirtualMemory( Partition, &stackHva, stackGva, stackSize, WHvMapGpaRangeFlagRead | WHvMapGpaRangeFlagWrite );
+		if ( FAILED( hresult ) )
+			return hresult;
+
+		Tss->Rsp[ i ] = stackGva;
+	}
+	
+	Tss->Iopb = TssComputeIopbOffset( X64_TASK_STATE_SEGMENT_IOPB_NONE );
 
 	return S_OK;
 }

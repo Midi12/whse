@@ -1,6 +1,8 @@
 #ifndef WINHVDEFS_HPP
 #define WINHVDEFS_HPP
 
+#include "DoubleLinkedList.hpp"
+
 #include <windows.h>
 #include <winhvplatform.h>
 
@@ -53,7 +55,7 @@ enum WHSE_REGISTER : uint8_t {
 	Rflags,
 	Gs,		Fs,		Es,
 	Ds,		Cs,		Ss,
-	Gdtr,	Ldtr,	Idtr,
+	Gdtr,	Ldtr,	Idtr,	Tr,
 	Cr0,	Cr2,	Cr3,	Cr4,
 	Efer,
 
@@ -88,6 +90,7 @@ static constexpr WHSE_REGISTER_NAME g_registers[] = {
 	WHvX64RegisterGdtr,
 	WHvX64RegisterLdtr,
 	WHvX64RegisterIdtr,
+	WHvX64RegisterTr,
 	WHvX64RegisterCr0,
 	WHvX64RegisterCr2,
 	WHvX64RegisterCr3,
@@ -115,6 +118,15 @@ typedef struct _WHSE_VIRTUAL_PROCESSOR {
 	WHSE_REGISTERS Registers; // Must be last as it is an array
 } WHSE_VIRTUAL_PROCESSOR, * PWHSE_VIRTUAL_PROCESSOR;
 
+enum _MEMORY_BLOCK_TYPE {
+	MemoryBlockPhysical,
+	MemoryBlockVirtual,
+
+	NumberOfMemoryBlockType
+};
+
+typedef enum _MEMORY_BLOCK_TYPE MEMORY_BLOCK_TYPE;
+
 /**
  * @brief A structure to represent a guest memory allocation
  *
@@ -128,10 +140,27 @@ typedef struct _WHSE_VIRTUAL_PROCESSOR {
  * that is backing the allocated guest physical address space. The <Size> field must be set
  * to the size that represent the allocated memory ranges (and must be non zero).
  */
-typedef struct _WHSE_ALLOCATION_NODE : SLIST_ENTRY {
-	PVOID GuestVirtualAddress;
+typedef struct _WHSE_ALLOCATION_NODE : DLIST_ENTRY {
+	// The type of block
+	// A block type of MemoryBlockPhysical represent guest physical memory (a Gpa backed by an Hva)
+	// A block type of MemoryBlockVirtual represent guest virtual memory (a Gva backed by a Gpa backed by an Hva)
+	//
+	MEMORY_BLOCK_TYPE BlockType;
+
+	// The Host Virtual Address (HVA) backing the Guest Physical Address (GPA)
+	//
+	uintptr_t HostVirtualAddress;
+
+	// The Guest Physical Address (GPA)
+	//
 	uintptr_t GuestPhysicalAddress;
-	PVOID HostVirtualAddress;
+
+	// The Guest Virtual Address (GVA)
+	//
+	uintptr_t GuestVirtualAddress;
+
+	// The size of the allocation
+	//
 	size_t Size;
 } WHSE_ALLOCATION_NODE, * PWHSE_ALLOCATION_NODE;
 
@@ -156,8 +185,8 @@ typedef struct _WHSE_MEMORY_LAYOUT_DESC {
 	WHSE_ADDRESS_SPACE_BOUNDARY PhysicalAddressSpace;
 	WHSE_ADDRESS_SPACE_BOUNDARY VirtualAddressSpace;
 	uintptr_t Pml4PhysicalAddress;
-	PVOID Pml4HostVa;
-	PSLIST_HEADER AllocationTracker;
+	uintptr_t Pml4HostVa;
+	PDLIST_HEADER AllocationTracker;
 	uintptr_t InterruptDescriptorTableVirtualAddress;
 } WHSE_MEMORY_LAYOUT_DESC, * PWHSE_MEMORY_LAYOUT_DESC;
 
