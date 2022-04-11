@@ -9,6 +9,72 @@
 #include <windows.h>
 #include "WinHvMemoryPrivate.hpp"
 #include "WinHvAllocationTracker.hpp"
+#include "WinHvHelpers.hpp"
+
+// Allocation strategy :
+// * Allocate by block
+// * To get base, find holes (due to deallocation) between nodes (need sorting periodically)
+// * A hole : b1 base + size <-- n free bytes there --> b2 base + size
+// * If a requested allocation can fit in the free bytes (the hole) then pick a block in this hole
+// * Else allocate at the tail (highest base + size)
+
+void FilterNodesByPhysicalAddress( PDLIST_HEADER Destination, PDLIST_HEADER Source ) {
+	if ( Destination == NULL )
+		return;
+
+	if ( Source == NULL )
+		return;
+
+	WHSE_ALLOCATION_NODE* head = ( WHSE_ALLOCATION_NODE* ) GetDListHead( Source );
+
+	for ( WHSE_ALLOCATION_NODE* current = head; current != NULL; current = ( WHSE_ALLOCATION_NODE* ) current->Next ) {
+		if ( current->BlockType == MemoryBlockPhysical ) {
+			WHSE_ALLOCATION_NODE* entry = ( WHSE_ALLOCATION_NODE* ) malloc( sizeof( WHSE_ALLOCATION_NODE ) );
+			memcpy( entry, current, sizeof( WHSE_ALLOCATION_NODE ) );
+			PushBackDListEntry( Destination, entry );
+		}
+	}
+}
+
+int ComparePhysNode( const WHSE_ALLOCATION_NODE** a, const WHSE_ALLOCATION_NODE** b ) {
+	return static_cast< int >( ( *a )->GuestPhysicalAddress - ( *b )->GuestPhysicalAddress );
+}
+
+void SortNodesByPhysicalAddress( PDLIST_HEADER Header ) {
+	if ( Header == NULL )
+		return;
+
+	SortDListBy( Header, ( PDLIST_COMPARATOR ) ComparePhysNode );
+}
+
+void FilterNodesByVirtualAddress( PDLIST_HEADER Destination, PDLIST_HEADER Source, uintptr_t Lowest, uintptr_t Highest ) {
+	if ( Destination == NULL )
+		return;
+
+	if ( Source == NULL )
+		return;
+
+	WHSE_ALLOCATION_NODE* head = ( WHSE_ALLOCATION_NODE* ) GetDListHead( Source );
+
+	for ( WHSE_ALLOCATION_NODE* current = head; current != NULL; current = ( WHSE_ALLOCATION_NODE* ) current->Next ) {
+		if ( current->BlockType == MemoryBlockVirtual && current->GuestVirtualAddress >= Lowest && current->GuestVirtualAddress < Highest ) {
+			PDLIST_ENTRY entry = ( PDLIST_ENTRY ) malloc( sizeof( WHSE_ALLOCATION_NODE ) );
+			memcpy( entry, current, sizeof( WHSE_ALLOCATION_NODE ) );
+			PushBackDListEntry( Destination, entry );
+		}
+	}
+}
+
+int CompareVirtNode( const WHSE_ALLOCATION_NODE** a, const WHSE_ALLOCATION_NODE** b ) {
+	return static_cast< int >( ( *a )->GuestVirtualAddress - ( *b )->GuestVirtualAddress );
+}
+
+void SortNodesByVirtualAddress( PDLIST_HEADER Header ) {
+	if ( Header == NULL )
+		return;
+
+	SortDListBy( Header, ( PDLIST_COMPARATOR ) CompareVirtNode );
+}
 
 /**
  * @brief Break down a virtual address to paging indexes
@@ -32,46 +98,164 @@ HRESULT WhSiDecomposeVirtualAddress( uintptr_t VirtualAddress, uint16_t* Pml4Ind
 	return S_OK;
 }
 
-static uintptr_t s_nextPhysicalAddress = 0x00000000'00000000 + PAGE_SIZE;
-
 /**
- * @brief Get one or more physical page
+ * @brief Suggest a physical address depending on allocation size
  *
  * @param Partition The VM partition
- * @param NumberOfPages The number of pages requested
+ * @param Size The allocation size
  * @param PhysicalPageAddress The returned guest physical address
  * @return A result code
  */
-HRESULT WhSiGetNextPhysicalPages( WHSE_PARTITION* Partition, size_t NumberOfPages, uintptr_t* PhysicalPageAddress ) {
-	if ( NumberOfPages <= 0 )
+HRESULT WhSiSuggestPhysicalAddress( WHSE_PARTITION* Partition, size_t Size, uintptr_t* PhysicalPageAddress ) {
+	if ( Partition == nullptr )
 		return HRESULT_FROM_WIN32( ERROR_INVALID_PARAMETER );
 
 	if ( PhysicalPageAddress == nullptr )
 		return HRESULT_FROM_WIN32( ERROR_INVALID_PARAMETER );
 
-	uintptr_t physicalAddress = s_nextPhysicalAddress;
+	if ( *PhysicalPageAddress != 0 )
+		return HRESULT_FROM_WIN32( ERROR_INVALID_PARAMETER );
 
-	// this is a very naive approach but okay for our small emulation goal
+	auto arena = &( Partition->MemoryLayout.MemoryArena );
+
+	uintptr_t lowest = arena->PhysicalAddressSpace.LowestAddress;
+	uintptr_t highest = arena->PhysicalAddressSpace.HighestAddress;
+
+	uintptr_t suggestedAddress = 0;
+
+	// Initialize temporary list
 	//
-	if ( physicalAddress >= Partition->MemoryLayout.PhysicalAddressSpace.HighestAddress )
-		return HRESULT_FROM_WIN32( ERROR_OUTOFMEMORY );
+	/*DLIST_HEADER physicalNodesList;
+	memset( &physicalNodesList, 0, sizeof( DLIST_HEADER ) );
+	InitializeDListHeader( &physicalNodesList );*/
 
-	s_nextPhysicalAddress += ( PAGE_SIZE * NumberOfPages );
-	*PhysicalPageAddress = physicalAddress;
+	// Build the filtered list
+	//
+	/*FilterNodesByPhysicalAddress(&physicalNodesList, &( arena->AllocatedMemoryBlocks ));*/
+
+	// Sort the filtered list
+	//
+	/*SortNodesByPhysicalAddress(&physicalNodesList);*/
+	SortNodesByPhysicalAddress( &( arena->AllocatedMemoryBlocks ) );
+
+	// Iterate nodes from head to the one before the tail
+	//
+	/*WHSE_ALLOCATION_NODE* head = ( WHSE_ALLOCATION_NODE* ) GetDListHead(&physicalNodesList);*/
+	WHSE_ALLOCATION_NODE* head = ( WHSE_ALLOCATION_NODE* ) GetDListHead( &( arena->AllocatedMemoryBlocks ) );
+	if ( head != NULL ) {
+		WHSE_ALLOCATION_NODE* current = NULL;
+		for ( current = head; current->Next != NULL; current = ( WHSE_ALLOCATION_NODE* ) current->Next ) {
+			WHSE_ALLOCATION_NODE* next = ( WHSE_ALLOCATION_NODE* ) current->Next;
+
+			if ( ALIGN_UP( ALIGN_UP( current->GuestPhysicalAddress + current->Size ) + Size ) < next->GuestPhysicalAddress ) {
+				suggestedAddress = ALIGN_UP( current->GuestPhysicalAddress + current->Size );
+				break;
+			}
+		}
+
+		//if ( suggestedAddress == 0 && current == ( WHSE_ALLOCATION_NODE* ) GetDListTail( &physicalNodesList ) ) {
+		if ( suggestedAddress == 0 && current == ( WHSE_ALLOCATION_NODE* ) GetDListTail( &( arena->AllocatedMemoryBlocks ) ) ) {
+			// Suggest address at the tail
+			//
+			suggestedAddress = ALIGN_UP( current->GuestPhysicalAddress + current->Size );
+		}
+	} else {
+		suggestedAddress = lowest;
+	}
+
+	/*FlushDList(&physicalNodesList);*/
+
+	if ( suggestedAddress < lowest || suggestedAddress >= ( highest - Size ) )
+		return HRESULT_FROM_WIN32( ERROR_NOT_FOUND );
+
+	*PhysicalPageAddress = suggestedAddress;
 
 	return S_OK;
 }
 
 /**
- * @brief Get one physical page
+ * @brief Suggest a virtual address depending on allocation size
  *
  * @param Partition The VM partition
- * @param PhysicalPageAddress The returned guest physical address
+ * @param Size The allocation size
+ * @param VirtualAddress The returned guest physical address
  * @return A result code
  */
-HRESULT WhSiGetNextPhysicalPage( WHSE_PARTITION* Partition, uintptr_t* PhysicalPageAddress ) {
-	return WhSiGetNextPhysicalPages( Partition, 1, PhysicalPageAddress );
+HRESULT WhSiSuggestVirtualAddress( WHSE_PARTITION* Partition, size_t Size, uintptr_t* VirtualAddress, WHSE_PROCESSOR_MODE Mode ) {
+	if ( Partition == nullptr )
+		return HRESULT_FROM_WIN32( ERROR_INVALID_PARAMETER );
+
+	if ( VirtualAddress == nullptr )
+		return HRESULT_FROM_WIN32( ERROR_INVALID_PARAMETER );
+
+	if ( *VirtualAddress != 0 )
+		return HRESULT_FROM_WIN32( ERROR_INVALID_PARAMETER );
+
+	auto arena = &( Partition->MemoryLayout.MemoryArena );
+
+	uintptr_t lowest = 0;
+	uintptr_t highest = 0;
+
+	if ( Mode == WHSE_PROCESSOR_MODE::KernelMode ) {
+		lowest = arena->VirtualAddressSpace.SystemSpace.LowestAddress;
+		highest = arena->VirtualAddressSpace.SystemSpace.HighestAddress;
+	}
+	else if ( Mode == WHSE_PROCESSOR_MODE::UserMode ) {
+		lowest = arena->VirtualAddressSpace.UserSpace.LowestAddress;
+		highest = arena->VirtualAddressSpace.UserSpace.HighestAddress;
+	}
+	else
+		return HRESULT_FROM_WIN32( ERROR_INVALID_PARAMETER );
+
+	uintptr_t suggestedAddress = 0;
+
+	// Initialize temporary list
+	//
+	DLIST_HEADER virtualNodesList;
+	memset( &virtualNodesList, 0, sizeof( DLIST_HEADER ) );
+	InitializeDListHeader( &virtualNodesList );
+
+	// Build the filtered list
+	//
+	FilterNodesByVirtualAddress( &virtualNodesList, &( arena->AllocatedMemoryBlocks ), lowest, highest );
+
+	// Sort the filtered list
+	//
+	SortNodesByVirtualAddress( &virtualNodesList );
+
+	// Iterate nodes from head to the one before the tail
+	//
+	WHSE_ALLOCATION_NODE* head = ( WHSE_ALLOCATION_NODE* ) GetDListHead( &virtualNodesList );
+	if ( head != NULL ) {
+		WHSE_ALLOCATION_NODE* current = NULL;
+		for ( current = head; current->Next != NULL; current = ( WHSE_ALLOCATION_NODE* ) current->Next ) {
+			WHSE_ALLOCATION_NODE* next = ( WHSE_ALLOCATION_NODE* ) current->Next;
+
+			if ( ALIGN_UP( ALIGN_UP( current->GuestVirtualAddress + current->Size ) + Size ) < next->GuestVirtualAddress ) {
+				suggestedAddress = ALIGN_UP( current->GuestVirtualAddress + current->Size );
+				break;
+			}
+		}
+
+		if ( suggestedAddress == 0 && current == ( WHSE_ALLOCATION_NODE* ) GetDListTail( &virtualNodesList ) ) {
+			// Suggest address at the tail
+			//
+			suggestedAddress = ALIGN_UP( current->GuestVirtualAddress + current->Size );
+		}
+	} else {
+		suggestedAddress = lowest;
+	}
+
+	FlushDList( &virtualNodesList );
+
+	if ( suggestedAddress < lowest || suggestedAddress >= ( highest - Size ) )
+		return HRESULT_FROM_WIN32( ERROR_NOT_FOUND );
+
+	*VirtualAddress = suggestedAddress;
+
+	return S_OK;
 }
+
 
 /**
  * @brief Internal helper to allocate host memory to guest physical memory
@@ -85,7 +269,7 @@ HRESULT WhSiGetNextPhysicalPage( WHSE_PARTITION* Partition, uintptr_t* PhysicalP
  */
 HRESULT WhSiAllocateGuestPhysicalMemory( WHSE_PARTITION* Partition, uintptr_t* HostVa, uintptr_t* GuestPa, size_t Size, WHSE_MEMORY_ACCESS_FLAGS Flags ) {
 	uintptr_t physicalAddress = 0;
-	auto hresult = WhSiGetNextPhysicalPage( Partition, &physicalAddress );
+	auto hresult = WhSiSuggestPhysicalAddress( Partition, Size, &physicalAddress );
 	if ( FAILED( hresult ) )
 		return hresult;
 
@@ -233,7 +417,7 @@ HRESULT WhSiInsertPageTableEntry( WHSE_PARTITION* Partition, uintptr_t VirtualAd
 		// Get the next available physical page
 		//
 		uintptr_t gpa { };
-		auto hresult = WhSiGetNextPhysicalPage( Partition, &gpa );
+		auto hresult = WhSiSuggestPhysicalAddress( Partition, PAGE_SIZE, &gpa );
 		if ( FAILED( hresult ) )
 			return hresult;
 
@@ -248,6 +432,18 @@ HRESULT WhSiInsertPageTableEntry( WHSE_PARTITION* Partition, uintptr_t VirtualAd
 		pte.PageFrameNumber = ( gpa / PAGE_SIZE );		// Physical address of PDP page
 
 		*ppte = pte;
+
+		WHSE_ALLOCATION_NODE node {
+			.BlockType = MEMORY_BLOCK_TYPE::MemoryBlockPte,
+			.HostVirtualAddress = 0,
+			.GuestPhysicalAddress = gpa,
+			.GuestVirtualAddress = 0,
+			.Size = PAGE_SIZE
+		};
+
+		hresult = WhSeInsertAllocationTrackingNode( Partition, node );
+		if ( FAILED( hresult ) )
+			return hresult;
 	}
 
 	return S_OK;
@@ -268,9 +464,7 @@ HRESULT WhSiFindBestGVA( WHSE_PARTITION* Partition, uintptr_t* GuestVa, size_t S
 	if ( GuestVa == nullptr )
 		return HRESULT_FROM_WIN32( ERROR_INVALID_PARAMETER );
 
-	auto tracker = Partition->MemoryLayout.AllocationTracker;
-	if ( tracker == nullptr )
-		return HRESULT_FROM_WIN32( PEERDIST_ERROR_NOT_INITIALIZED );
+	auto tracker = &( Partition->MemoryLayout.MemoryArena.AllocatedMemoryBlocks );
 
 	auto first = reinterpret_cast< WHSE_ALLOCATION_NODE* >( GetDListHead( tracker ) );
 	if ( first == nullptr )
@@ -361,8 +555,8 @@ HRESULT WhSiSetupGlobalDescriptorTable( WHSE_PARTITION* Partition, WHSE_REGISTER
 
 	// Allocate a page for the TSS
 	//
-	uintptr_t tssHva = 0;
-	uintptr_t tssGva = 0xffffa000'00000000;
+	/*uintptr_t tssHva = 0;
+	uintptr_t tssGva = 0xffffc000'00000000;
 	hresult = WhSeAllocateGuestVirtualMemory( Partition, &tssHva, tssGva, sizeof( X64_TASK_STATE_SEGMENT ), WHvMapGpaRangeFlagRead | WHvMapGpaRangeFlagWrite );
 	if ( FAILED( hresult ) )
 		return hresult;
@@ -374,7 +568,7 @@ HRESULT WhSiSetupGlobalDescriptorTable( WHSE_PARTITION* Partition, WHSE_REGISTER
 	X64_TSS_ENTRY tssSegmentDesc { 0 };
 	hresult = WhSpCreateTssEntry( &tssSegmentDesc, tssGva, sizeof( X64_TSS_ENTRY ), 0x89, 0x00 );
 	if ( FAILED( hresult ) )
-		return hresult;
+		return hresult;*/
 
 	// Load the temp descriptors in memory
 	//
@@ -402,7 +596,7 @@ HRESULT WhSiSetupGlobalDescriptorTable( WHSE_PARTITION* Partition, WHSE_REGISTER
 
 	// Offset : 0x0028	Use : 64-bit Task State Segment
 	//
-	*( PX64_TSS_ENTRY ) ( &( gdt[ 5 ] ) ) = tssSegmentDesc;
+	//*( PX64_TSS_ENTRY ) ( &( gdt[ 5 ] ) ) = tssSegmentDesc;
 
 	// Load GDTR
 	//
@@ -479,6 +673,52 @@ HRESULT WhSiSetupInterruptDescriptorTable( WHSE_PARTITION* Partition, WHSE_REGIS
 	Registers[ Idtr ].Table.Limit = static_cast< uint16_t >( sizeof( IDT_ENTRY ) * NUMBER_OF_IDT_DESCRIPTORS - 1 );
 
 	Partition->MemoryLayout.InterruptDescriptorTableVirtualAddress = idtTrapGva;
+
+	return S_OK;
+}
+
+/**
+ * @brief Setup memory arena
+ *
+ * @param Partition The VM partition
+ * @return A result code
+ */
+HRESULT WhSiInitializeMemoryArena( WHSE_PARTITION* Partition ) {
+	if ( Partition == nullptr )
+		return HRESULT_FROM_WIN32( ERROR_INVALID_PARAMETER );
+
+	auto arena = &( Partition->MemoryLayout.MemoryArena );
+
+	// Get available physical memory
+	//
+	uint64_t totalMemInKib = 0;
+	if ( ::GetPhysicallyInstalledSystemMemory( &totalMemInKib ) == FALSE && totalMemInKib == 0 )
+		return WhSeGetLastHresult();
+
+	// Initialize Physical Address Space (PAS)
+	//
+	arena->PhysicalAddressSpace.LowestAddress = 0x00000000'00000000;
+	arena->PhysicalAddressSpace.HighestAddress = ( totalMemInKib << 10 ) - 1;
+	arena->PhysicalAddressSpace.Size = totalMemInKib << 10;
+
+	// Initialize Virtual Address Space (VAS)
+	//
+	uintptr_t lowestUserVa = 0x00000000'00000000;
+	uintptr_t highestUserVa = 0x00007fff'ffff0000;
+	arena->VirtualAddressSpace.UserSpace.LowestAddress = lowestUserVa;
+	arena->VirtualAddressSpace.UserSpace.HighestAddress = highestUserVa;
+	arena->VirtualAddressSpace.UserSpace.Size = ( highestUserVa - lowestUserVa ) - 1;
+
+	uintptr_t lowestSystemVa = 0xffff8000'00000000;
+	uintptr_t highestSystemVa = 0xffffffff'ffff0000;
+	arena->VirtualAddressSpace.SystemSpace.LowestAddress = lowestSystemVa;
+	arena->VirtualAddressSpace.SystemSpace.HighestAddress = highestSystemVa;
+	arena->VirtualAddressSpace.SystemSpace.Size = ( highestSystemVa - lowestSystemVa ) - 1;
+
+	// Initialize the doubly linked list that will maintain
+	// our allocated memory regions
+	//
+	InitializeDListHeader( &( arena->AllocatedMemoryBlocks ) );
 
 	return S_OK;
 }

@@ -15,13 +15,9 @@ HRESULT WhSeInitializeAllocationTracker( WHSE_PARTITION* Partition ) {
 	
 	// Initialize address space allocations tracking
 	//
-	PDLIST_HEADER tracker = reinterpret_cast< PDLIST_HEADER >( malloc( sizeof( decltype( *tracker ) ) ) );
-	if ( tracker == nullptr )
-		return HRESULT_FROM_WIN32( ERROR_OUTOFMEMORY );
+	auto tracker = &( Partition->MemoryLayout.MemoryArena.AllocatedMemoryBlocks );
 
 	InitializeDListHeader( tracker );
-
-	Partition->MemoryLayout.AllocationTracker = tracker;
 
 	return S_OK;
 }
@@ -36,10 +32,7 @@ HRESULT WhSeFreeAllocationTracker( WHSE_PARTITION* Partition ) {
 	if ( Partition == nullptr )
 		return HRESULT_FROM_WIN32( ERROR_INVALID_PARAMETER );
 
-	auto tracker = Partition->MemoryLayout.AllocationTracker;
-	if ( tracker == nullptr )
-		return HRESULT_FROM_WIN32( PEERDIST_ERROR_NOT_INITIALIZED );
-
+	auto tracker = &( Partition->MemoryLayout.MemoryArena.AllocatedMemoryBlocks );
 
 	auto first = reinterpret_cast< WHSE_ALLOCATION_NODE* >( GetDListHead( tracker ) );
 	if ( first == nullptr )
@@ -82,9 +75,7 @@ HRESULT WhSeFindAllocationNode( WHSE_PARTITION* Partition, WHSE_ALLOCATION_TRACK
 	if ( *Node != nullptr )
 		return HRESULT_FROM_WIN32( ERROR_INVALID_PARAMETER );
 
-	auto tracker = Partition->MemoryLayout.AllocationTracker;
-	if ( tracker == nullptr )
-		return HRESULT_FROM_WIN32( PEERDIST_ERROR_NOT_INITIALIZED );
+	auto tracker = &( Partition->MemoryLayout.MemoryArena.AllocatedMemoryBlocks );
 
 	auto first = reinterpret_cast< WHSE_ALLOCATION_NODE* >( GetDListHead( tracker ) );
 	if ( first == nullptr )
@@ -123,9 +114,7 @@ HRESULT WhSeFindAllocationNodeByGva( WHSE_PARTITION* Partition, uintptr_t GuestV
 	if ( *Node != nullptr )
 		return HRESULT_FROM_WIN32( ERROR_INVALID_PARAMETER );
 
-	auto tracker = Partition->MemoryLayout.AllocationTracker;
-	if ( tracker == nullptr )
-		return HRESULT_FROM_WIN32( PEERDIST_ERROR_NOT_INITIALIZED );
+	auto tracker = &( Partition->MemoryLayout.MemoryArena.AllocatedMemoryBlocks );
 
 	auto first = reinterpret_cast< WHSE_ALLOCATION_NODE* >( GetDListHead( tracker ) );
 	if ( first == nullptr )
@@ -164,9 +153,7 @@ HRESULT WhSeFindAllocationNodeByGpa( WHSE_PARTITION* Partition, uintptr_t GuestP
 	if ( *Node != nullptr )
 		return HRESULT_FROM_WIN32( ERROR_INVALID_PARAMETER );
 
-	auto tracker = Partition->MemoryLayout.AllocationTracker;
-	if ( tracker == nullptr )
-		return HRESULT_FROM_WIN32( PEERDIST_ERROR_NOT_INITIALIZED );
+	auto tracker = &( Partition->MemoryLayout.MemoryArena.AllocatedMemoryBlocks );
 
 	auto first = reinterpret_cast< WHSE_ALLOCATION_NODE* >( GetDListHead( tracker ) );
 	if ( first == nullptr )
@@ -176,7 +163,8 @@ HRESULT WhSeFindAllocationNodeByGpa( WHSE_PARTITION* Partition, uintptr_t GuestP
 	//
 	auto current = first;
 	while ( current != nullptr ) {
-		if ( current->GuestPhysicalAddress == GuestPa ) {
+		if ( current->BlockType != MEMORY_BLOCK_TYPE::MemoryBlockPte
+			&& current->GuestPhysicalAddress == GuestPa ) {
 			*Node = current;
 			break;
 		}
@@ -201,8 +189,9 @@ HRESULT WHSEAPI WhSeInsertAllocationTrackingNode( WHSE_PARTITION* Partition, WHS
 		return HRESULT_FROM_WIN32( ERROR_OUTOFMEMORY );
 
 	memcpy_s( node, sizeof( decltype( *node ) ), &Node, sizeof( decltype( Node ) ) );
-
-	::PushBackDListEntry( Partition->MemoryLayout.AllocationTracker, node );
+	
+	auto tracker = &( Partition->MemoryLayout.MemoryArena.AllocatedMemoryBlocks );
+	::PushBackDListEntry( tracker, node );
 
 	return S_OK;
 }

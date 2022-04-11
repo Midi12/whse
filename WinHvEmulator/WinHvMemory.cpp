@@ -58,6 +58,8 @@ HRESULT WhSeAllocateGuestPhysicalMemory( WHSE_PARTITION* Partition, uintptr_t* H
 	if ( *HostVa != 0 )
 		return HRESULT_FROM_WIN32( ERROR_INVALID_PARAMETER );
 
+	auto size = ALIGN_UP( Size );
+
 	// Allocate memory into host
 	//
 	auto protectionFlags = AccessFlagsToProtectionFlags( Flags );
@@ -67,7 +69,7 @@ HRESULT WhSeAllocateGuestPhysicalMemory( WHSE_PARTITION* Partition, uintptr_t* H
 
 	// Create the allocated range into the guest physical address space
 	//
-	auto hresult = ::WHvMapGpaRange( Partition->Handle, allocatedHostVa, static_cast< WHV_GUEST_PHYSICAL_ADDRESS >( GuestPa ), ALIGN_UP( Size ), Flags );
+	auto hresult = ::WHvMapGpaRange( Partition->Handle, allocatedHostVa, static_cast< WHV_GUEST_PHYSICAL_ADDRESS >( GuestPa ), size, Flags );
 	if ( FAILED( hresult ) ) {
 		if ( allocatedHostVa != nullptr )
 			::VirtualFree( allocatedHostVa, 0, MEM_RELEASE );
@@ -80,7 +82,7 @@ HRESULT WhSeAllocateGuestPhysicalMemory( WHSE_PARTITION* Partition, uintptr_t* H
 		.HostVirtualAddress = reinterpret_cast< uintptr_t >( allocatedHostVa ),
 		.GuestPhysicalAddress = GuestPa,
 		.GuestVirtualAddress = 0,
-		.Size = ALIGN_UP( Size )
+		.Size = size
 	};
 
 	hresult = WhSeInsertAllocationTrackingNode( Partition, node );
@@ -113,12 +115,14 @@ HRESULT WHSEAPI WhSeMapHostToGuestPhysicalMemory( WHSE_PARTITION* Partition, uin
 	if ( HostVa == 0 )
 		return HRESULT_FROM_WIN32( ERROR_INVALID_PARAMETER );
 
+	auto size = ALIGN_UP( Size );
+
 	WHSE_ALLOCATION_NODE node {
 		.BlockType = MEMORY_BLOCK_TYPE::MemoryBlockPhysical,
 		.HostVirtualAddress = HostVa,
 		.GuestPhysicalAddress = GuestPa,
 		.GuestVirtualAddress = 0,
-		.Size = ALIGN_UP( Size )
+		.Size = size
 	};
 
 	auto hresult = WhSeInsertAllocationTrackingNode( Partition, node );
@@ -127,7 +131,7 @@ HRESULT WHSEAPI WhSeMapHostToGuestPhysicalMemory( WHSE_PARTITION* Partition, uin
 
 	// Map the memory range into the guest physical address space
 	//
-	return ::WHvMapGpaRange( Partition->Handle, reinterpret_cast< PVOID >( HostVa ), static_cast< WHV_GUEST_PHYSICAL_ADDRESS >( GuestPa ), ALIGN_UP( Size ), Flags );
+	return ::WHvMapGpaRange( Partition->Handle, reinterpret_cast< PVOID >( HostVa ), static_cast< WHV_GUEST_PHYSICAL_ADDRESS >( GuestPa ), size, Flags );
 }
 
 /**
@@ -154,10 +158,12 @@ HRESULT WhSeAllocateGuestVirtualMemory( WHSE_PARTITION* Partition, uintptr_t* Ho
 	if ( *HostVa != 0 )
 		return HRESULT_FROM_WIN32( ERROR_INVALID_PARAMETER );
 
+	auto size = ALIGN_UP( Size );
+
 	// Allocate memory into host
 	//
 	auto protectionFlags = AccessFlagsToProtectionFlags( Flags );
-	auto allocatedHostVa = ::VirtualAlloc( nullptr, Size, MEM_COMMIT | MEM_RESERVE, protectionFlags );
+	auto allocatedHostVa = ::VirtualAlloc( nullptr, size, MEM_COMMIT | MEM_RESERVE, protectionFlags );
 	if ( allocatedHostVa == nullptr )
 		return WhSeGetLastHresult();
 
@@ -166,7 +172,7 @@ HRESULT WhSeAllocateGuestVirtualMemory( WHSE_PARTITION* Partition, uintptr_t* Ho
 	// Compute starting and ending guest virtual addresses
 	//
 	auto startingGva = ALIGN( GuestVa );
-	auto endingGva = ALIGN_UP( startingGva + Size );
+	auto endingGva = ALIGN_UP( startingGva + size );
 
 	// Setup matching PTEs
 	//
@@ -181,7 +187,7 @@ HRESULT WhSeAllocateGuestVirtualMemory( WHSE_PARTITION* Partition, uintptr_t* Ho
 	if ( FAILED( hresult ) )
 		return hresult;
 
-	hresult = ::WHvMapGpaRange( Partition->Handle, allocatedHostVa, static_cast< WHV_GUEST_PHYSICAL_ADDRESS >( gpa ), ALIGN_UP( Size ), Flags );
+	hresult = ::WHvMapGpaRange( Partition->Handle, allocatedHostVa, static_cast< WHV_GUEST_PHYSICAL_ADDRESS >( gpa ), size, Flags );
 	if ( FAILED( hresult ) ) {
 		if ( allocatedHostVa != nullptr )
 			::VirtualFree( allocatedHostVa, 0, MEM_RELEASE );
@@ -194,7 +200,7 @@ HRESULT WhSeAllocateGuestVirtualMemory( WHSE_PARTITION* Partition, uintptr_t* Ho
 		.HostVirtualAddress = reinterpret_cast< uintptr_t >( allocatedHostVa ),
 		.GuestPhysicalAddress = gpa,
 		.GuestVirtualAddress = GuestVa,
-		.Size = ALIGN_UP( Size )
+		.Size = size
 	};
 
 	hresult = WhSeInsertAllocationTrackingNode( Partition, node );
@@ -229,10 +235,12 @@ HRESULT WHSEAPI WhSeMapHostToGuestVirtualMemory( WHSE_PARTITION* Partition, uint
 
 	auto hresult = S_OK;
 
+	auto size = ALIGN_UP( Size );
+
 	// Compute starting and ending guest virtual addresses
 	//
 	auto startingGva = ALIGN( GuestVa );
-	auto endingGva = ALIGN_UP( startingGva + Size );
+	auto endingGva = ALIGN_UP( startingGva + size );
 
 	// Setup matching PTEs (and allocate guest physical memory accordingly)
 	//
@@ -253,14 +261,14 @@ HRESULT WHSEAPI WhSeMapHostToGuestVirtualMemory( WHSE_PARTITION* Partition, uint
 		.HostVirtualAddress = HostVa,
 		.GuestPhysicalAddress = gpa,
 		.GuestVirtualAddress = GuestVa,
-		.Size = ALIGN_UP( Size )
+		.Size = size
 	};
 
 	hresult = WhSeInsertAllocationTrackingNode( Partition, node );
 	if ( FAILED( hresult ) )
 		return hresult;
 
-	return ::WHvMapGpaRange( Partition->Handle, reinterpret_cast< PVOID >( HostVa ), static_cast< WHV_GUEST_PHYSICAL_ADDRESS >( gpa ), ALIGN_UP( Size ), Flags );
+	return ::WHvMapGpaRange( Partition->Handle, reinterpret_cast< PVOID >( HostVa ), static_cast< WHV_GUEST_PHYSICAL_ADDRESS >( gpa ), size, Flags );
 }
 
 /**
@@ -339,22 +347,19 @@ HRESULT WHSEAPI WhSeFreeGuestVirtualMemory( WHSE_PARTITION* Partition, uintptr_t
  * @return A result code
  */
 HRESULT WhSeInitializeMemoryLayout( WHSE_PARTITION* Partition ) {
-	// Get available physical memory
-	//
-	uint64_t totalMemInKib = 0;
-	if ( ::GetPhysicallyInstalledSystemMemory( &totalMemInKib ) == FALSE && totalMemInKib == 0 )
-		return WhSeGetLastHresult();
+	if ( Partition == nullptr )
+		return HRESULT_FROM_WIN32( ERROR_INVALID_PARAMETER );
 
-	Partition->MemoryLayout.PhysicalAddressSpace.LowestAddress = 0x00000000'00000000;
-	Partition->MemoryLayout.PhysicalAddressSpace.HighestAddress = ( totalMemInKib << 10 ) - 1;
-	Partition->MemoryLayout.PhysicalAddressSpace.SizeInBytes = totalMemInKib << 10;
+	auto hresult = WhSiInitializeMemoryArena( Partition );
+	if ( FAILED( hresult ) )
+		return hresult;
 
 	uintptr_t pml4Address = 0;
 	Partition->MemoryLayout.Pml4HostVa = 0;
 
 	// Build paging tables
 	//
-	auto hresult = WhSiSetupPaging( Partition, &pml4Address );
+	hresult = WhSiSetupPaging( Partition, &pml4Address );
 	if ( FAILED( hresult ) )
 		return hresult;
 

@@ -121,6 +121,7 @@ typedef struct _WHSE_VIRTUAL_PROCESSOR {
 enum _MEMORY_BLOCK_TYPE {
 	MemoryBlockPhysical,
 	MemoryBlockVirtual,
+	MemoryBlockPte,
 
 	NumberOfMemoryBlockType
 };
@@ -167,11 +168,37 @@ typedef struct _WHSE_ALLOCATION_NODE : DLIST_ENTRY {
 /**
  * @brief A structure to represent the boundaries of address space
  */
-typedef struct _WHSE_ADDRESS_SPACE_BOUNDARY {
+struct _ADDRESS_SPACE {
 	uintptr_t LowestAddress;
 	uintptr_t HighestAddress;
-	size_t SizeInBytes;
-} WHSE_ADDRESS_SPACE_BOUNDARY, * PWHSE_ADDRESS_SPACE_BOUNDARY;
+	size_t Size;
+};
+
+typedef struct _ADDRESS_SPACE ADDRESS_SPACE;
+typedef struct _ADDRESS_SPACE* PADDRESS_SPACE;
+
+/**
+ * @brief A structure to represent the boundaries of virtual address space
+ */
+struct _VIRTUAL_ADDRESS_SPACE {
+	ADDRESS_SPACE UserSpace;
+	ADDRESS_SPACE SystemSpace;
+};
+
+typedef struct _VIRTUAL_ADDRESS_SPACE VIRTUAL_ADDRESS_SPACE;
+typedef struct _VIRTUAL_ADDRESS_SPACE* PVIRTUAL_ADDRESS_SPACE;
+
+/**
+ * @brief A structure maintaining the necessary data to manage memory allocation
+ */
+struct _MEMORY_ARENA {
+	ADDRESS_SPACE PhysicalAddressSpace;
+	VIRTUAL_ADDRESS_SPACE VirtualAddressSpace;
+	DLIST_HEADER AllocatedMemoryBlocks;
+};
+
+typedef struct _MEMORY_ARENA MEMORY_ARENA;
+typedef struct _MEMORY_ARENA* PMEMORY_ARENA;
 
 /**
  * @brief A structure to store the memory layout
@@ -182,11 +209,9 @@ typedef struct _WHSE_ADDRESS_SPACE_BOUNDARY {
  * and <Pml4HostVa> properties.
  */
 typedef struct _WHSE_MEMORY_LAYOUT_DESC {
-	WHSE_ADDRESS_SPACE_BOUNDARY PhysicalAddressSpace;
-	WHSE_ADDRESS_SPACE_BOUNDARY VirtualAddressSpace;
+	MEMORY_ARENA MemoryArena;
 	uintptr_t Pml4PhysicalAddress;
 	uintptr_t Pml4HostVa;
-	PDLIST_HEADER AllocationTracker;
 	uintptr_t InterruptDescriptorTableVirtualAddress;
 } WHSE_MEMORY_LAYOUT_DESC, * PWHSE_MEMORY_LAYOUT_DESC;
 

@@ -305,19 +305,25 @@ void SortDListBy( PDLIST_HEADER Header, PDLIST_COMPARATOR Comparator ) {
     if ( Comparator == NULL )
         return;
 
-    PDLIST_ENTRY* ptrs = ( PDLIST_ENTRY* ) malloc( sizeof( PDLIST_ENTRY ) * GetDListCount( Header ) );
+    if ( GetDListCount( Header ) == 0 )
+        return;
+
+    size_t count = GetDListCount( Header );
+    size_t size = sizeof( PDLIST_ENTRY ) * ( count + 1 );
+    PDLIST_ENTRY* ptrs = ( PDLIST_ENTRY* ) malloc( size );
     if ( ptrs == NULL )
         return;
 
     int i = 0;
-    for ( PDLIST_ENTRY current = GetDListHead( Header ); current != NULL && i < GetDListCount( Header ); current = current->Next ) {
+    for ( PDLIST_ENTRY current = GetDListHead( Header ); current != NULL; current = current->Next ) {
         ptrs[ i++ ] = current;
     }
 
-    qsort( ptrs, GetDListCount( Header ), sizeof( PDLIST_ENTRY ), ( int( * )( const void*, const void* ) )Comparator );
+    qsort( ptrs, count, sizeof( PDLIST_ENTRY ), ( int( * )( const void*, const void* ) )Comparator );
 
     InitializeDListHeader( Header );
-    for ( int j = 0; j < i; j++ ) {
+
+    for ( int j = 0; j < count; j++ ) {
         PushBackDListEntry( Header, ptrs[ j ] );
     }
 

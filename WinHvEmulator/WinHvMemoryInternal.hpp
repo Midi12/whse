@@ -147,13 +147,13 @@ typedef struct _X64_TSS_ENTRY * PX64_TSS_ENTRY;
 //
 HRESULT WhSiDecomposeVirtualAddress( uintptr_t VirtualAddress, uint16_t* Pml4Index, uint16_t* PdpIndex, uint16_t* PdIndex, uint16_t* PtIndex, uint16_t* Offset );
 
-// Get one or more physical page
+// Suggest a physical address depending on allocation size
 //
-HRESULT WhSiGetNextPhysicalPages( WHSE_PARTITION* Partition, size_t NumberOfPages, uintptr_t* PhysicalPageAddress );
+HRESULT WhSiSuggestPhysicalAddress( WHSE_PARTITION* Partition, size_t Size, uintptr_t* PhysicalPageAddress );
 
-// Get one physical page
+// Suggest a virtual address depending on allocation size
 //
-HRESULT WhSiGetNextPhysicalPage( WHSE_PARTITION* Partition, uintptr_t* PhysicalPageAddress );
+HRESULT WhSiSuggestVirtualAddress( WHSE_PARTITION* Partition, size_t Size, uintptr_t* VirtualAddress, WHSE_PROCESSOR_MODE Mode );
 
 // Internal helper to allocate host memory to guest physical memory
 //
@@ -179,5 +179,9 @@ HRESULT WhSiSetupGlobalDescriptorTable( WHSE_PARTITION* Partition, WHSE_REGISTER
 // Setup IDT
 //
 HRESULT WhSiSetupInterruptDescriptorTable( WHSE_PARTITION* Partition, WHSE_REGISTERS Registers );
+
+// Setup memory arena
+//
+HRESULT WhSiInitializeMemoryArena( WHSE_PARTITION* Partition );
 
 #endif // !WINHVMEMORYINTERNAL_HPP

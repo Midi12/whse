@@ -38,9 +38,6 @@ HRESULT WhSeCreateProcessor( WHSE_PARTITION* Partition, WHSE_PROCESSOR_MODE Mode
 
 	vp->Mode = Mode;
 
-	uintptr_t lowestAddress = 0;
-	uintptr_t highestAddress = 0;
-
 	int ring;
 	int codeSelector;
 	int dataSelector;
@@ -48,8 +45,6 @@ HRESULT WhSeCreateProcessor( WHSE_PARTITION* Partition, WHSE_PROCESSOR_MODE Mode
 	switch ( Mode ) {
 		using enum WHSE_PROCESSOR_MODE;
 	case UserMode:
-		lowestAddress = 0x00000000'00000000;
-		highestAddress = 0x00008000'00000000 - 64KiB;
 		ring = 3;
 		//codeSelector = 0x30;
 		//dataSelector = 0x28;
@@ -57,8 +52,6 @@ HRESULT WhSeCreateProcessor( WHSE_PARTITION* Partition, WHSE_PROCESSOR_MODE Mode
 		dataSelector = 0x20;
 		break;
 	case KernelMode:
-		lowestAddress = 0xffff8000'00000000;
-		highestAddress = 0xffffffff'ffffffff - 4MiB;
 		ring = 0;
 		//codeSelector = 0x10;
 		//dataSelector = 0x18;
@@ -68,12 +61,6 @@ HRESULT WhSeCreateProcessor( WHSE_PARTITION* Partition, WHSE_PROCESSOR_MODE Mode
 	default:
 		return HRESULT_FROM_WIN32( ERROR_NOT_SUPPORTED );
 	}
-
-	// Setup Virtual Address Space boundaries
-	//
-	Partition->MemoryLayout.VirtualAddressSpace.LowestAddress = lowestAddress;
-	Partition->MemoryLayout.VirtualAddressSpace.HighestAddress = highestAddress;
-	Partition->MemoryLayout.VirtualAddressSpace.SizeInBytes = ( highestAddress - lowestAddress ) - 1;
 
 	// Setup segment registers
 	//
