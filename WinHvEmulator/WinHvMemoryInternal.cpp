@@ -601,7 +601,7 @@ HRESULT WhSiSetupGlobalDescriptorTable( WHSE_PARTITION* Partition, WHSE_REGISTER
 	// Load GDTR
 	//
 	Registers[ Gdtr ].Table.Base = gdtGva;
-	Registers[ Gdtr ].Table.Limit = static_cast< uint16_t >( sizeof( X64_TSS_ENTRY ) + ( sizeof( GDT_ENTRY ) * NUMBER_OF_GDT_DESCRIPTORS - 1 ) );
+	Registers[ Gdtr ].Table.Limit = static_cast< uint16_t >( ( sizeof( X64_TSS_ENTRY ) + ( sizeof( GDT_ENTRY ) * NUMBER_OF_GDT_DESCRIPTORS ) ) - 1 );
 
 	// Load TR
 	//
