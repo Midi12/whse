@@ -11,6 +11,10 @@
  * @return A result code
  */
 HRESULT WhSeCreateProcessor( WHSE_PARTITION* Partition, WHSE_PROCESSOR_MODE Mode ) {
+	// TEMPORARY FORCE KERNEL MODE
+	//
+	Mode = WHSE_PROCESSOR_MODE::KernelMode;
+
 	if ( Partition == nullptr )
 		return HRESULT_FROM_WIN32( ERROR_INVALID_PARAMETER );
 
@@ -76,6 +80,7 @@ HRESULT WhSeCreateProcessor( WHSE_PARTITION* Partition, WHSE_PROCESSOR_MODE Mode
 	registers[ Ds ] = registers[ Ss ];
 	registers[ Es ] = registers[ Ss ];
 	registers[ Gs ] = registers[ Ss ];
+	//registers[ Fs ] = registers[ Ss ];
 
 	// Set IF bit
 	//

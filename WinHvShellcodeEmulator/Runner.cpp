@@ -34,27 +34,67 @@ bool OnIoPortAccessExit( _WHSE_PARTITION* Partition, WHV_VP_EXIT_CONTEXT* VpCont
 	return true;
 }
 
+#define DumpGpr( holder, name ) \
+	 printf( #name ## "\t= %016llx\n", holder[ name ].Reg64 )
+
+#define DumpSeg( holder, name ) \
+	 printf( #name ## "\tSel= %04lx\tBase= %016llx\tLimit= %04lx\n", holder[ name ].Segment.Selector, holder[ name ].Segment.Base, holder[ name ].Segment.Limit )
+
+#define DumpTbl( holder, name ) \
+	 printf( #name ## "\tBase= %016llx\tLimit= %04lx\n", holder[ name ].Table.Base, holder[ name ].Table.Limit )
+
 bool OnUnrecoverableExceptionExit( _WHSE_PARTITION* Partition, WHV_VP_EXIT_CONTEXT* VpContext, WHSE_UNRECOVERABLE_EXCEPTION_CONTEXT* ExitContext ) {
 	printf( "UnrecoverableExceptionCallback\n" );
 
 	auto registers = Partition->VirtualProcessor.Registers;
 
-	auto cr2 = registers[ Cr2 ].Reg64;
-	printf( "OnPageFault: cr2=%llx\n", cr2 );
-	if ( cr2 != 0 ) {
-		printf( "BUG -> #DF on Usermode #PF\n" );
 
-		auto rspGva = registers[ Rsp ].Reg64;
+	//// Get stack HVA
+	////
+	//auto rspGva = registers[ Rsp ].Reg64;
+	//WHSE_ALLOCATION_NODE* node = nullptr;
+	//if ( FAILED( WhSeFindAllocationNodeByGva( Partition, rspGva, &node ) ) )
+	//	return false;
 
-		// Get stack HVA
-		//
-		WHSE_ALLOCATION_NODE* node = nullptr;
-		if ( FAILED( WhSeFindAllocationNodeByGva( Partition, rspGva, &node ) ) )
-			return false;
+	//auto rspHva = node->HostVirtualAddress;
+	//printf( "RSP = %llx (hva = %llx)\n", rspGva, rspHva );
 
-		auto rspHva = node->HostVirtualAddress;
-		printf( "RSP = %llx (hva = %llx)\n", rspGva, rspHva );
-	}
+	DumpGpr( registers, Rip );
+
+	DumpGpr( registers, Rsp );
+	DumpGpr( registers, Rbp );
+
+
+	DumpGpr( registers, Rax );
+	DumpGpr( registers, Rbx );
+	DumpGpr( registers, Rcx );
+	DumpGpr( registers, Rdx );
+	DumpGpr( registers, Rdi );
+	DumpGpr( registers, Rsi );
+	DumpGpr( registers, R8 );
+	DumpGpr( registers, R9 );
+	DumpGpr( registers, R10 );
+	DumpGpr( registers, R11 );
+	DumpGpr( registers, R12 );
+	DumpGpr( registers, R13 );
+	DumpGpr( registers, R14 );
+	DumpGpr( registers, R15 );
+
+	DumpGpr( registers, Cr0 );
+	DumpGpr( registers, Cr2 );
+	DumpGpr( registers, Cr3 );
+	DumpGpr( registers, Cr4 );
+
+	DumpSeg( registers, Cs );
+	DumpSeg( registers, Ds );
+	DumpSeg( registers, Ss );
+	DumpSeg( registers, Es );
+	DumpSeg( registers, Fs );
+	DumpSeg( registers, Gs );
+	DumpSeg( registers, Tr );
+
+	DumpTbl( registers, Gdtr );
+	DumpTbl( registers, Idtr );
 
 	return false;
 }

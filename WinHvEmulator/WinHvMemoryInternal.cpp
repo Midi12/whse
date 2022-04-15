@@ -566,7 +566,7 @@ HRESULT WhSiSetupGlobalDescriptorTable( WHSE_PARTITION* Partition, WHSE_REGISTER
 		return hresult;
 
 	X64_TSS_ENTRY tssSegmentDesc { 0 };
-	hresult = WhSpCreateTssEntry( &tssSegmentDesc, tssGva, sizeof( X64_TASK_STATE_SEGMENT ), 0x89, 0 );
+	hresult = WhSpCreateTssEntry( &tssSegmentDesc, tssGva, sizeof( X64_TASK_STATE_SEGMENT ) - 1, 0x89, 0 );
 	if ( FAILED( hresult ) )
 		return hresult;
 
@@ -596,7 +596,7 @@ HRESULT WhSiSetupGlobalDescriptorTable( WHSE_PARTITION* Partition, WHSE_REGISTER
 
 	// Offset : 0x0028	Use : 64-bit Task State Segment
 	//
-	*( PX64_TSS_ENTRY ) ( &( gdt[ 5 ] ) ) = tssSegmentDesc;
+	*reinterpret_cast< PX64_TSS_ENTRY >( &( gdt[ 5 ] ) ) = tssSegmentDesc;
 
 	// Load GDTR
 	//
@@ -606,6 +606,8 @@ HRESULT WhSiSetupGlobalDescriptorTable( WHSE_PARTITION* Partition, WHSE_REGISTER
 	// Load TR
 	//
 	Registers[ Tr ].Segment.Selector = 0x0028;
+	Registers[ Tr ].Segment.Base = Registers[ Gdtr ].Table.Base;
+	Registers[ Tr ].Segment.Limit = Registers[ Gdtr ].Table.Limit;
 
 	return S_OK;
 }
@@ -657,7 +659,7 @@ HRESULT WhSiSetupInterruptDescriptorTable( WHSE_PARTITION* Partition, WHSE_REGIS
 				.Low = static_cast< uint16_t >( ptr & UINT16_MAX ),
 				.Selector = 0x0008, // Kernel CS index
 				.InterruptStackTable = 0,
-				.Attributes = MAKE_IDT_ATTRS( 0b00, 0b1110 ), // Make them traps
+				.Attributes = MAKE_IDT_ATTRS( 0b00, 0b1110 ),
 				.Mid = static_cast< uint16_t >( ( ptr >> 16 ) & UINT16_MAX ),
 				.High = static_cast< uint32_t >( ( ptr >> 32 ) & UINT32_MAX ),
 				.Reserved = 0
@@ -670,7 +672,7 @@ HRESULT WhSiSetupInterruptDescriptorTable( WHSE_PARTITION* Partition, WHSE_REGIS
 	// Load IDTR
 	//
 	Registers[ Idtr ].Table.Base = idtGva;
-	Registers[ Idtr ].Table.Limit = static_cast< uint16_t >( sizeof( IDT_ENTRY ) * NUMBER_OF_IDT_DESCRIPTORS - 1 );
+	Registers[ Idtr ].Table.Limit = static_cast< uint16_t >( ( sizeof( IDT_ENTRY ) * NUMBER_OF_IDT_DESCRIPTORS ) - 1 );
 
 	Partition->MemoryLayout.InterruptDescriptorTableVirtualAddress = idtTrapGva;
 
