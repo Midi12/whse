@@ -518,7 +518,7 @@ HRESULT WhSiSetupGlobalDescriptorTable( WHSE_PARTITION* Partition, WHSE_REGISTER
 	// Allocate GDT
 	//
 	uintptr_t gdtHva = 0;
-	uintptr_t gdtGva = 0xffff8000'00000000;
+	uintptr_t gdtGva = 0xfffff800'00000000;
 	auto hresult = WhSeAllocateGuestVirtualMemory( Partition, &gdtHva, gdtGva, PAGE_SIZE, WHvMapGpaRangeFlagRead | WHvMapGpaRangeFlagWrite );
 	if ( FAILED( hresult ) )
 		return hresult;
@@ -555,8 +555,8 @@ HRESULT WhSiSetupGlobalDescriptorTable( WHSE_PARTITION* Partition, WHSE_REGISTER
 
 	// Allocate a page for the TSS
 	//
-	/*uintptr_t tssHva = 0;
-	uintptr_t tssGva = 0xffffc000'00000000;
+	uintptr_t tssHva = 0;
+	uintptr_t tssGva = 0xfffff800'00001000;
 	hresult = WhSeAllocateGuestVirtualMemory( Partition, &tssHva, tssGva, sizeof( X64_TASK_STATE_SEGMENT ), WHvMapGpaRangeFlagRead | WHvMapGpaRangeFlagWrite );
 	if ( FAILED( hresult ) )
 		return hresult;
@@ -566,9 +566,9 @@ HRESULT WhSiSetupGlobalDescriptorTable( WHSE_PARTITION* Partition, WHSE_REGISTER
 		return hresult;
 
 	X64_TSS_ENTRY tssSegmentDesc { 0 };
-	hresult = WhSpCreateTssEntry( &tssSegmentDesc, tssGva, sizeof( X64_TSS_ENTRY ), 0x89, 0x00 );
+	hresult = WhSpCreateTssEntry( &tssSegmentDesc, tssGva, sizeof( X64_TASK_STATE_SEGMENT ), 0x89, 0 );
 	if ( FAILED( hresult ) )
-		return hresult;*/
+		return hresult;
 
 	// Load the temp descriptors in memory
 	//
@@ -596,7 +596,7 @@ HRESULT WhSiSetupGlobalDescriptorTable( WHSE_PARTITION* Partition, WHSE_REGISTER
 
 	// Offset : 0x0028	Use : 64-bit Task State Segment
 	//
-	//*( PX64_TSS_ENTRY ) ( &( gdt[ 5 ] ) ) = tssSegmentDesc;
+	*( PX64_TSS_ENTRY ) ( &( gdt[ 5 ] ) ) = tssSegmentDesc;
 
 	// Load GDTR
 	//
@@ -627,7 +627,7 @@ HRESULT WhSiSetupInterruptDescriptorTable( WHSE_PARTITION* Partition, WHSE_REGIS
 	// Allocate two pages, one for the IDT
 	//
 	uintptr_t idtHva = 0;
-	uintptr_t idtGva = 0xffff8000'00001000;
+	uintptr_t idtGva = 0xfffff800'00002000;
 	auto hresult = WhSeAllocateGuestVirtualMemory( Partition, &idtHva, idtGva, PAGE_SIZE, WHvMapGpaRangeFlagRead | WHvMapGpaRangeFlagWrite );
 	if ( FAILED( hresult ) )
 		return hresult;
@@ -635,7 +635,7 @@ HRESULT WhSiSetupInterruptDescriptorTable( WHSE_PARTITION* Partition, WHSE_REGIS
 	// The other one to trap ISR access
 	//
 	uintptr_t idtTrapHva = 0;
-	uintptr_t idtTrapGva = 0xffff8000'00002000;
+	uintptr_t idtTrapGva = 0xfffff800'00003000;
 	hresult = WhSeAllocateGuestVirtualMemory( Partition, &idtTrapHva, idtTrapGva, PAGE_SIZE, WHvMapGpaRangeFlagRead | WHvMapGpaRangeFlagWrite );
 	if ( FAILED( hresult ) )
 		return hresult;
@@ -657,7 +657,7 @@ HRESULT WhSiSetupInterruptDescriptorTable( WHSE_PARTITION* Partition, WHSE_REGIS
 				.Low = static_cast< uint16_t >( ptr & UINT16_MAX ),
 				.Selector = 0x0008, // Kernel CS index
 				.InterruptStackTable = 0,
-				.Attributes = MAKE_IDT_ATTRS( 0, 0b1110 ), // Make them traps
+				.Attributes = MAKE_IDT_ATTRS( 0b00, 0b1110 ), // Make them traps
 				.Mid = static_cast< uint16_t >( ( ptr >> 16 ) & UINT16_MAX ),
 				.High = static_cast< uint32_t >( ( ptr >> 32 ) & UINT32_MAX ),
 				.Reserved = 0

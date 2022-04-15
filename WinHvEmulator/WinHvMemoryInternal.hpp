@@ -58,8 +58,8 @@ typedef struct _GDT_ENTRY {
 	uint16_t BaseLow;
 	uint8_t BaseMid;
 	uint8_t Access;
-	uint8_t LimitHigh : 4;
-	uint8_t Flags : 4;
+    uint8_t LimitHigh : 4;
+    uint8_t Flags : 4;
 	uint8_t BaseHigh;
 } GDT_ENTRY, * PGDT_ENTRY;
 #pragma pack( pop )
@@ -71,7 +71,7 @@ constexpr static size_t NUMBER_OF_GDT_DESCRIPTORS = 5;
 #define X64_TASK_STATE_SEGMENT_NUMBER_OF_ISTS 7
 #define X64_TASK_STATE_SEGMENT_NUMBER_OF_SPS 3
 
-#pragma pack( push, 4 )
+#pragma pack( push, 1 )
 struct _X64_TASK_STATE_SEGMENT {
     uint32_t Reserved00;
 

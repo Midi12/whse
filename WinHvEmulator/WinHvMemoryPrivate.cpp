@@ -111,16 +111,14 @@ HRESULT WhSpInitializeTss( WHSE_PARTITION* Partition, PX64_TASK_STATE_SEGMENT Ts
 	if ( Tss == nullptr )
 		return HRESULT_FROM_WIN32( ERROR_INVALID_PARAMETER );
 
-	for ( auto i = 0; i < X64_TASK_STATE_SEGMENT_NUMBER_OF_SPS; i++ ) {
-		uintptr_t stackHva = 0;
-		size_t stackSize = 1MiB;
-		uintptr_t stackGva = 0xffffb000'00000000 + ( i * stackSize );
-		auto hresult = WhSeAllocateGuestVirtualMemory( Partition, &stackHva, stackGva, stackSize, WHvMapGpaRangeFlagRead | WHvMapGpaRangeFlagWrite );
-		if ( FAILED( hresult ) )
-			return hresult;
+	uintptr_t stackHva = 0;
+	constexpr size_t stackSize = 1MiB;
+	uintptr_t stackGva = 0xffffb000'00000000;
+	auto hresult = WhSeAllocateGuestVirtualMemory( Partition, &stackHva, stackGva, stackSize, WHvMapGpaRangeFlagRead | WHvMapGpaRangeFlagWrite );
+	if ( FAILED( hresult ) )
+		return hresult;
 
-		Tss->Rsp[ i ] = stackGva;
-	}
+	Tss->Rsp0 = stackGva;
 	
 	Tss->Iopb = TssComputeIopbOffset( X64_TASK_STATE_SEGMENT_IOPB_NONE );
 

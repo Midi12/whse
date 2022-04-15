@@ -25,67 +25,87 @@ constexpr size_t ALIGN_UP( size_t x ) {
 }
 
 bool OnMemoryAccessExit( _WHSE_PARTITION* Partition, WHV_VP_EXIT_CONTEXT* VpContext, WHSE_MEMORY_ACCESS_CONTEXT* ExitContext ) {
-	printf( "HandleMemoryAccessExit" );
+	printf( "HandleMemoryAccessExit\n" );
 	return true;
 }
 
 bool OnIoPortAccessExit( _WHSE_PARTITION* Partition, WHV_VP_EXIT_CONTEXT* VpContext, WHSE_IO_PORT_ACCESS_CONTEXT* ExitContext ) {
-	printf( "IoPortAccessCallback" );
+	printf( "IoPortAccessCallback\n" );
 	return true;
 }
 
 bool OnUnrecoverableExceptionExit( _WHSE_PARTITION* Partition, WHV_VP_EXIT_CONTEXT* VpContext, WHSE_UNRECOVERABLE_EXCEPTION_CONTEXT* ExitContext ) {
-	printf( "UnrecoverableExceptionCallback" );
+	printf( "UnrecoverableExceptionCallback\n" );
+
+	auto registers = Partition->VirtualProcessor.Registers;
+
+	auto cr2 = registers[ Cr2 ].Reg64;
+	printf( "OnPageFault: cr2=%llx\n", cr2 );
+	if ( cr2 != 0 ) {
+		printf( "BUG -> #DF on Usermode #PF\n" );
+
+		auto rspGva = registers[ Rsp ].Reg64;
+
+		// Get stack HVA
+		//
+		WHSE_ALLOCATION_NODE* node = nullptr;
+		if ( FAILED( WhSeFindAllocationNodeByGva( Partition, rspGva, &node ) ) )
+			return false;
+
+		auto rspHva = node->HostVirtualAddress;
+		printf( "RSP = %llx (hva = %llx)\n", rspGva, rspHva );
+	}
+
 	return false;
 }
 
 bool OnInvalidRegisterValueExit( _WHSE_PARTITION* Partition, WHV_VP_EXIT_CONTEXT* VpContext, WHSE_INVALID_REGISTER_VALUE_CONTEXT* ExitContext ) {
-	printf( "InvalidRegisterValueCallback" );
+	printf( "InvalidRegisterValueCallback\n" );
 	return false;
 }
 
 bool OnUnsupportedFeatureExit( _WHSE_PARTITION* Partition, WHV_VP_EXIT_CONTEXT* VpContext, WHSE_UNSUPPORTED_FEATURE_CONTEXT* ExitContext ) {
-	printf( "UnsupportedFeatureCallback" );
+	printf( "UnsupportedFeatureCallback\n" );
 	return false;
 }
 
 bool OnInterruptionDeliveryExit( _WHSE_PARTITION* Partition, WHV_VP_EXIT_CONTEXT* VpContext, WHSE_INTERRUPTION_DELIVERY_CONTEXT* ExitContext ) {
-	printf( "InterruptionDeliveryCallback" );
+	printf( "InterruptionDeliveryCallback\n" );
 	return false;
 }
 
 bool OnHaltExit( _WHSE_PARTITION* Partition, WHV_VP_EXIT_CONTEXT* VpContext, WHSE_HALT_CONTEXT* ExitContext ) {
-	printf( "HaltCallback" );
+	printf( "HaltCallback\n" );
 	return false;
 }
 
 bool OnApicEoiExit( _WHSE_PARTITION* Partition, WHV_VP_EXIT_CONTEXT* VpContext, WHSE_APIC_EOI_CONTEXT* ExitContext ) {
-	printf( "ApicEoiCallback" );
+	printf( "ApicEoiCallback\n" );
 	return false;
 }
 
 bool OnMsrAccessExit( _WHSE_PARTITION* Partition, WHV_VP_EXIT_CONTEXT* VpContext, WHSE_MSR_ACCESS_CONTEXT* ExitContext ) {
-	printf( "MsrAccessCallback" );
+	printf( "MsrAccessCallback\n" );
 	return false;
 }
 
 bool OnCpuidAccessExit( _WHSE_PARTITION* Partition, WHV_VP_EXIT_CONTEXT* VpContext, WHSE_CPUID_ACCESS_CONTEXT* ExitContext ) {
-	printf( "CpuidAccessCallback" );
+	printf( "CpuidAccessCallback\n" );
 	return false;
 }
 
 bool OnVirtualProcessorExit( _WHSE_PARTITION* Partition, WHV_VP_EXIT_CONTEXT* VpContext, WHSE_VP_EXCEPTION_CONTEXT* ExitContext ) {
-	printf( "VirtualProcessorCallback" );
+	printf( "VirtualProcessorCallback\n" );
 	return false;
 }
 
 bool OnRdtscAccessExit( _WHSE_PARTITION* Partition, WHV_VP_EXIT_CONTEXT* VpContext, WHSE_RDTSC_ACCESS_CONTEXT* ExitContext ) {
-	printf( "RdtscAccessCallback" );
+	printf( "RdtscAccessCallback\n" );
 	return false;
 }
 
 bool OnUserCanceledExit( _WHSE_PARTITION* Partition, WHV_VP_EXIT_CONTEXT* VpContext, WHSE_USER_CANCELED_CONTEXT* ExitContext ) {
-	printf( "UserCanceledCallback" );
+	printf( "UserCanceledCallback\n" );
 	return false;
 }
 
