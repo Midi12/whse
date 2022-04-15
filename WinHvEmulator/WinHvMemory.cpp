@@ -48,7 +48,7 @@ constexpr uint32_t AccessFlagsToProtectionFlags( WHSE_MEMORY_ACCESS_FLAGS Flags 
  * @param Flags The flags that describe the allocated memory (Read Write Execute)
  * @return A result code
  */
-HRESULT WhSeAllocateGuestPhysicalMemory( WHSE_PARTITION* Partition, uintptr_t* HostVa, uintptr_t GuestPa, size_t Size, WHSE_MEMORY_ACCESS_FLAGS Flags ) {
+HRESULT WhSeAllocateGuestPhysicalMemory( WHSE_PARTITION* Partition, uintptr_t* HostVa, uintptr_t* GuestPa, size_t Size, WHSE_MEMORY_ACCESS_FLAGS Flags ) {
 	if ( Partition == nullptr )
 		return HRESULT_FROM_WIN32( ERROR_INVALID_PARAMETER );
 
@@ -58,7 +58,27 @@ HRESULT WhSeAllocateGuestPhysicalMemory( WHSE_PARTITION* Partition, uintptr_t* H
 	if ( *HostVa != 0 )
 		return HRESULT_FROM_WIN32( ERROR_INVALID_PARAMETER );
 
+	if ( GuestPa == nullptr )
+		return HRESULT_FROM_WIN32( ERROR_INVALID_PARAMETER );
+
 	auto size = ALIGN_UP( Size );
+
+	uintptr_t suggestedGpa = 0;
+	if ( *GuestPa == 0 ) {
+		auto hresult = WhSiSuggestPhysicalAddress( Partition, size, &suggestedGpa );
+		if ( FAILED( hresult ) )
+			return hresult;
+	}
+	else
+		suggestedGpa = ALIGN( *GuestPa );
+
+	PWHSE_ALLOCATION_NODE existingNode = nullptr;
+	auto hresult = WhSeFindAllocationNodeByGpa( Partition, suggestedGpa, &existingNode );
+	if ( hresult != HRESULT_FROM_WIN32( ERROR_NOT_FOUND ) && FAILED( hresult ) )
+		return hresult;
+
+	if ( existingNode != nullptr )
+		return HRESULT_FROM_WIN32( ERROR_INTERNAL_ERROR );
 
 	// Allocate memory into host
 	//
@@ -69,7 +89,7 @@ HRESULT WhSeAllocateGuestPhysicalMemory( WHSE_PARTITION* Partition, uintptr_t* H
 
 	// Create the allocated range into the guest physical address space
 	//
-	auto hresult = ::WHvMapGpaRange( Partition->Handle, allocatedHostVa, static_cast< WHV_GUEST_PHYSICAL_ADDRESS >( GuestPa ), size, Flags );
+	hresult = ::WHvMapGpaRange( Partition->Handle, allocatedHostVa, static_cast< WHV_GUEST_PHYSICAL_ADDRESS >( suggestedGpa ), size, Flags );
 	if ( FAILED( hresult ) ) {
 		if ( allocatedHostVa != nullptr )
 			::VirtualFree( allocatedHostVa, 0, MEM_RELEASE );
@@ -80,7 +100,7 @@ HRESULT WhSeAllocateGuestPhysicalMemory( WHSE_PARTITION* Partition, uintptr_t* H
 	WHSE_ALLOCATION_NODE node {
 		.BlockType = MEMORY_BLOCK_TYPE::MemoryBlockPhysical,
 		.HostVirtualAddress = reinterpret_cast< uintptr_t >( allocatedHostVa ),
-		.GuestPhysicalAddress = GuestPa,
+		.GuestPhysicalAddress = suggestedGpa,
 		.GuestVirtualAddress = 0,
 		.Size = size
 	};
@@ -90,6 +110,7 @@ HRESULT WhSeAllocateGuestPhysicalMemory( WHSE_PARTITION* Partition, uintptr_t* H
 		return hresult;
 
 	*HostVa = reinterpret_cast< uintptr_t >( allocatedHostVa );
+	*GuestPa = suggestedGpa;
 
 	return hresult;
 }
@@ -108,30 +129,56 @@ HRESULT WhSeAllocateGuestPhysicalMemory( WHSE_PARTITION* Partition, uintptr_t* H
  * @param Flags The flags that describe the allocated memory (Read Write Execute)
  * @return A result code
  */
-HRESULT WHSEAPI WhSeMapHostToGuestPhysicalMemory( WHSE_PARTITION* Partition, uintptr_t HostVa, uintptr_t GuestPa, size_t Size, WHSE_MEMORY_ACCESS_FLAGS Flags ) {
+HRESULT WHSEAPI WhSeMapHostToGuestPhysicalMemory( WHSE_PARTITION* Partition, uintptr_t HostVa, uintptr_t* GuestPa, size_t Size, WHSE_MEMORY_ACCESS_FLAGS Flags ) {
 	if ( Partition == nullptr )
 		return HRESULT_FROM_WIN32( ERROR_INVALID_PARAMETER );
 
 	if ( HostVa == 0 )
 		return HRESULT_FROM_WIN32( ERROR_INVALID_PARAMETER );
 
+	if ( GuestPa == nullptr )
+		return HRESULT_FROM_WIN32( ERROR_INVALID_PARAMETER );
+
 	auto size = ALIGN_UP( Size );
+
+	uintptr_t suggestedGpa = 0;
+	if ( *GuestPa == 0 ) {
+		auto hresult = WhSiSuggestPhysicalAddress( Partition, size, &suggestedGpa );
+		if ( FAILED( hresult ) )
+			return hresult;
+	}
+	else
+		suggestedGpa = ALIGN( *GuestPa );
+
+	PWHSE_ALLOCATION_NODE existingNode = nullptr;
+	auto hresult = WhSeFindAllocationNodeByGpa( Partition, suggestedGpa, &existingNode );
+	if ( hresult != HRESULT_FROM_WIN32( ERROR_NOT_FOUND ) && FAILED( hresult ) )
+		return hresult;
+
+	if ( existingNode != nullptr )
+		return HRESULT_FROM_WIN32( ERROR_INTERNAL_ERROR );
 
 	WHSE_ALLOCATION_NODE node {
 		.BlockType = MEMORY_BLOCK_TYPE::MemoryBlockPhysical,
 		.HostVirtualAddress = HostVa,
-		.GuestPhysicalAddress = GuestPa,
+		.GuestPhysicalAddress = suggestedGpa,
 		.GuestVirtualAddress = 0,
 		.Size = size
 	};
 
-	auto hresult = WhSeInsertAllocationTrackingNode( Partition, node );
+	hresult = WhSeInsertAllocationTrackingNode( Partition, node );
 	if ( FAILED( hresult ) )
 		return hresult;
 
 	// Map the memory range into the guest physical address space
 	//
-	return ::WHvMapGpaRange( Partition->Handle, reinterpret_cast< PVOID >( HostVa ), static_cast< WHV_GUEST_PHYSICAL_ADDRESS >( GuestPa ), size, Flags );
+	hresult = ::WHvMapGpaRange( Partition->Handle, reinterpret_cast< PVOID >( HostVa ), static_cast< WHV_GUEST_PHYSICAL_ADDRESS >( suggestedGpa ), size, Flags );
+	if ( FAILED( hresult ) )
+		return hresult;
+
+	*GuestPa = suggestedGpa;
+
+	return hresult;
 }
 
 /**
@@ -148,7 +195,7 @@ HRESULT WHSEAPI WhSeMapHostToGuestPhysicalMemory( WHSE_PARTITION* Partition, uin
  * @param Flags The flags that describe the allocated memory (Read Write Execute)
  * @return A result code
  */
-HRESULT WhSeAllocateGuestVirtualMemory( WHSE_PARTITION* Partition, uintptr_t* HostVa, uintptr_t GuestVa, size_t Size, WHSE_MEMORY_ACCESS_FLAGS Flags ) {
+HRESULT WhSeAllocateGuestVirtualMemory( WHSE_PARTITION* Partition, uintptr_t* HostVa, uintptr_t* GuestVa, size_t Size, WHSE_MEMORY_ACCESS_FLAGS Flags ) {
 	if ( Partition == nullptr )
 		return HRESULT_FROM_WIN32( ERROR_INVALID_PARAMETER );
 
@@ -158,7 +205,27 @@ HRESULT WhSeAllocateGuestVirtualMemory( WHSE_PARTITION* Partition, uintptr_t* Ho
 	if ( *HostVa != 0 )
 		return HRESULT_FROM_WIN32( ERROR_INVALID_PARAMETER );
 
+	if ( GuestVa == nullptr )
+		return HRESULT_FROM_WIN32( ERROR_INVALID_PARAMETER );
+
 	auto size = ALIGN_UP( Size );
+
+	uintptr_t suggestedGva = 0;
+	if ( *GuestVa == 0 ) {
+		auto hresult = WhSiSuggestVirtualAddress( Partition, size, &suggestedGva, Partition->VirtualProcessor.Mode );
+		if ( FAILED( hresult ) )
+			return hresult;
+	}
+	else
+		suggestedGva = ALIGN( *GuestVa );
+
+	PWHSE_ALLOCATION_NODE existingNode = nullptr;
+	auto hresult = WhSeFindAllocationNodeByGva( Partition, suggestedGva, &existingNode );
+	if ( hresult != HRESULT_FROM_WIN32( ERROR_NOT_FOUND ) && FAILED( hresult ) )
+		return hresult;
+
+	if ( existingNode != nullptr )
+		return HRESULT_FROM_WIN32( ERROR_INTERNAL_ERROR );
 
 	// Allocate memory into host
 	//
@@ -167,11 +234,9 @@ HRESULT WhSeAllocateGuestVirtualMemory( WHSE_PARTITION* Partition, uintptr_t* Ho
 	if ( allocatedHostVa == nullptr )
 		return WhSeGetLastHresult();
 
-	auto hresult = S_OK;
-
 	// Compute starting and ending guest virtual addresses
 	//
-	auto startingGva = ALIGN( GuestVa );
+	auto startingGva = ALIGN( suggestedGva );
 	auto endingGva = ALIGN_UP( startingGva + size );
 
 	// Setup matching PTEs
@@ -199,7 +264,7 @@ HRESULT WhSeAllocateGuestVirtualMemory( WHSE_PARTITION* Partition, uintptr_t* Ho
 		.BlockType = MEMORY_BLOCK_TYPE::MemoryBlockVirtual,
 		.HostVirtualAddress = reinterpret_cast< uintptr_t >( allocatedHostVa ),
 		.GuestPhysicalAddress = gpa,
-		.GuestVirtualAddress = GuestVa,
+		.GuestVirtualAddress = startingGva,
 		.Size = size
 	};
 
@@ -208,6 +273,7 @@ HRESULT WhSeAllocateGuestVirtualMemory( WHSE_PARTITION* Partition, uintptr_t* Ho
 		return hresult;
 
 	*HostVa = reinterpret_cast< uintptr_t >( allocatedHostVa );
+	*GuestVa = startingGva;
 
 	return hresult;
 }
@@ -226,20 +292,38 @@ HRESULT WhSeAllocateGuestVirtualMemory( WHSE_PARTITION* Partition, uintptr_t* Ho
  * @param Flags The flags that describe the allocated memory (Read Write Execute)
  * @return A result code
  */
-HRESULT WHSEAPI WhSeMapHostToGuestVirtualMemory( WHSE_PARTITION* Partition, uintptr_t HostVa, uintptr_t GuestVa, size_t Size, WHSE_MEMORY_ACCESS_FLAGS Flags ) {
+HRESULT WHSEAPI WhSeMapHostToGuestVirtualMemory( WHSE_PARTITION* Partition, uintptr_t HostVa, uintptr_t* GuestVa, size_t Size, WHSE_MEMORY_ACCESS_FLAGS Flags ) {
 	if ( Partition == nullptr )
 		return HRESULT_FROM_WIN32( ERROR_INVALID_PARAMETER );
 
 	if ( HostVa == 0 )
 		return HRESULT_FROM_WIN32( ERROR_INVALID_PARAMETER );
 
-	auto hresult = S_OK;
+	if ( GuestVa == nullptr )
+		return HRESULT_FROM_WIN32( ERROR_INVALID_PARAMETER );
 
 	auto size = ALIGN_UP( Size );
 
+	uintptr_t suggestedGva = 0;
+	if ( *GuestVa == 0 ) {
+		auto hresult = WhSiSuggestVirtualAddress( Partition, size, &suggestedGva, Partition->VirtualProcessor.Mode );
+		if ( FAILED( hresult ) )
+			return hresult;
+	}
+	else
+		suggestedGva = ALIGN( *GuestVa );
+
+	PWHSE_ALLOCATION_NODE existingNode = nullptr;
+	auto hresult = WhSeFindAllocationNodeByGva( Partition, suggestedGva, &existingNode );
+	if ( hresult != HRESULT_FROM_WIN32( ERROR_NOT_FOUND ) && FAILED( hresult ) )
+		return hresult;
+
+	if ( existingNode != nullptr )
+		return HRESULT_FROM_WIN32( ERROR_INTERNAL_ERROR );
+
 	// Compute starting and ending guest virtual addresses
 	//
-	auto startingGva = ALIGN( GuestVa );
+	auto startingGva = ALIGN( suggestedGva );
 	auto endingGva = ALIGN_UP( startingGva + size );
 
 	// Setup matching PTEs (and allocate guest physical memory accordingly)
@@ -255,12 +339,15 @@ HRESULT WHSEAPI WhSeMapHostToGuestVirtualMemory( WHSE_PARTITION* Partition, uint
 	if ( FAILED( hresult ) )
 		return hresult;
 
+	hresult = ::WHvMapGpaRange( Partition->Handle, reinterpret_cast< PVOID >( HostVa ), static_cast< WHV_GUEST_PHYSICAL_ADDRESS >( gpa ), size, Flags );
+	if ( FAILED( hresult ) )
+		return hresult;
 
 	WHSE_ALLOCATION_NODE node {
 		.BlockType = MEMORY_BLOCK_TYPE::MemoryBlockVirtual,
 		.HostVirtualAddress = HostVa,
 		.GuestPhysicalAddress = gpa,
-		.GuestVirtualAddress = GuestVa,
+		.GuestVirtualAddress = startingGva,
 		.Size = size
 	};
 
@@ -268,7 +355,9 @@ HRESULT WHSEAPI WhSeMapHostToGuestVirtualMemory( WHSE_PARTITION* Partition, uint
 	if ( FAILED( hresult ) )
 		return hresult;
 
-	return ::WHvMapGpaRange( Partition->Handle, reinterpret_cast< PVOID >( HostVa ), static_cast< WHV_GUEST_PHYSICAL_ADDRESS >( gpa ), size, Flags );
+	*GuestVa = startingGva;
+
+	return hresult;
 }
 
 /**

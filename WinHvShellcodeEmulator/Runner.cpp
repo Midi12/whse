@@ -308,9 +308,9 @@ DWORD WINAPI Run( const RUN_OPTIONS& options ) {
 	// Allocate stack
 	//
 	uintptr_t stackHva = 0;
-	constexpr uintptr_t stackGva = 0x00007FFF'00000000 - 0x1000000;
+	uintptr_t stackGva = 0x00007FFF'00000000 - 0x1000000;
 	size_t stackSize = 1 * 1024 * 1024;
-	if ( FAILED( WhSeAllocateGuestVirtualMemory( partition, &stackHva, stackGva, stackSize, WHvMapGpaRangeFlagRead | WHvMapGpaRangeFlagWrite ) ) )
+	if ( FAILED( WhSeAllocateGuestVirtualMemory( partition, &stackHva, &stackGva, stackSize, WHvMapGpaRangeFlagRead | WHvMapGpaRangeFlagWrite ) ) )
 		EXIT_WITH_MESSAGE( "Failed to allocate stack" );
 
 	printf( "Allocated stack space %llx (size = %llx)\n", static_cast< unsigned long long >( stackGva ), static_cast< unsigned long long >( stackSize ) );
@@ -324,7 +324,7 @@ DWORD WINAPI Run( const RUN_OPTIONS& options ) {
 	::CopyMemory( shellcode, options.Code, options.CodeSize );
 
 	uintptr_t codeGva = options.BaseAddress != 0 ? options.BaseAddress : 0x10000;
-	if ( FAILED( WhSeMapHostToGuestVirtualMemory( partition, reinterpret_cast< uintptr_t >( shellcode ), codeGva, ALIGN_UP( options.CodeSize ), WHvMapGpaRangeFlagRead | WHvMapGpaRangeFlagWrite | WHvMapGpaRangeFlagExecute ) ) )
+	if ( FAILED( WhSeMapHostToGuestVirtualMemory( partition, reinterpret_cast< uintptr_t >( shellcode ), &codeGva, ALIGN_UP( options.CodeSize ), WHvMapGpaRangeFlagRead | WHvMapGpaRangeFlagWrite | WHvMapGpaRangeFlagExecute ) ) )
 		EXIT_WITH_MESSAGE( "Failed to map shellcode" );
 
 	printf( "Allocated code memory %llx (size = %llx, allocated = %llx)\n", static_cast< unsigned long long >( codeGva ), static_cast< unsigned long long >( options.CodeSize ), static_cast< unsigned long long >( ALIGN_UP( options.CodeSize ) ) );

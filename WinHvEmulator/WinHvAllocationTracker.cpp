@@ -117,8 +117,8 @@ HRESULT WhSeFindAllocationNodeByGva( WHSE_PARTITION* Partition, uintptr_t GuestV
 	auto tracker = &( Partition->MemoryLayout.MemoryArena.AllocatedMemoryBlocks );
 
 	auto first = reinterpret_cast< WHSE_ALLOCATION_NODE* >( GetDListHead( tracker ) );
-	if ( first == nullptr )
-		return HRESULT_FROM_WIN32( ERROR_NO_MORE_ITEMS );
+	/*if ( first == nullptr )
+		return HRESULT_FROM_WIN32( ERROR_NO_MORE_ITEMS );*/
 
 	// Iterate over the list
 	//
@@ -157,8 +157,8 @@ HRESULT WhSeFindAllocationNodeByGpa( WHSE_PARTITION* Partition, uintptr_t GuestP
 	auto tracker = &( Partition->MemoryLayout.MemoryArena.AllocatedMemoryBlocks );
 
 	auto first = reinterpret_cast< WHSE_ALLOCATION_NODE* >( GetDListHead( tracker ) );
-	if ( first == nullptr )
-		return HRESULT_FROM_WIN32( ERROR_NO_MORE_ITEMS );
+	/*if ( first == nullptr )
+		return HRESULT_FROM_WIN32( ERROR_NO_MORE_ITEMS );*/
 
 	// Iterate over the list
 	//

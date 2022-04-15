@@ -114,7 +114,7 @@ HRESULT WhSpInitializeTss( WHSE_PARTITION* Partition, PX64_TASK_STATE_SEGMENT Ts
 	uintptr_t stackHva = 0;
 	constexpr size_t stackSize = 1MiB;
 	uintptr_t stackGva = 0xffffb000'00000000;
-	auto hresult = WhSeAllocateGuestVirtualMemory( Partition, &stackHva, stackGva, stackSize, WHvMapGpaRangeFlagRead | WHvMapGpaRangeFlagWrite );
+	auto hresult = WhSeAllocateGuestVirtualMemory( Partition, &stackHva, &stackGva, stackSize, WHvMapGpaRangeFlagRead | WHvMapGpaRangeFlagWrite );
 	if ( FAILED( hresult ) )
 		return hresult;
 
