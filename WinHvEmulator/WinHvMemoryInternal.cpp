@@ -518,7 +518,8 @@ HRESULT WhSiSetupGlobalDescriptorTable( WHSE_PARTITION* Partition, WHSE_REGISTER
 	// Allocate GDT
 	//
 	uintptr_t gdtHva = 0;
-	uintptr_t gdtGva = 0xfffff800'00000000;
+	//uintptr_t gdtGva = 0xfffff800'00000000;
+	uintptr_t gdtGva = 0;
 	auto hresult = WhSeAllocateGuestVirtualMemory( Partition, &gdtHva, &gdtGva, PAGE_SIZE, WHvMapGpaRangeFlagRead | WHvMapGpaRangeFlagWrite );
 	if ( FAILED( hresult ) )
 		return hresult;
@@ -556,7 +557,8 @@ HRESULT WhSiSetupGlobalDescriptorTable( WHSE_PARTITION* Partition, WHSE_REGISTER
 	// Allocate a page for the TSS
 	//
 	uintptr_t tssHva = 0;
-	uintptr_t tssGva = 0xfffff800'00001000;
+	//uintptr_t tssGva = 0xfffff800'00001000;
+	uintptr_t tssGva = 0;
 	hresult = WhSeAllocateGuestVirtualMemory( Partition, &tssHva, &tssGva, sizeof( X64_TASK_STATE_SEGMENT ), WHvMapGpaRangeFlagRead | WHvMapGpaRangeFlagWrite );
 	if ( FAILED( hresult ) )
 		return hresult;
@@ -606,8 +608,8 @@ HRESULT WhSiSetupGlobalDescriptorTable( WHSE_PARTITION* Partition, WHSE_REGISTER
 	// Load TR
 	//
 	Registers[ Tr ].Segment.Selector = 0x0028;
-	Registers[ Tr ].Segment.Base = Registers[ Gdtr ].Table.Base;
-	Registers[ Tr ].Segment.Limit = Registers[ Gdtr ].Table.Limit;
+	//Registers[ Tr ].Segment.Base = Registers[ Gdtr ].Table.Base;
+	//Registers[ Tr ].Segment.Limit = Registers[ Gdtr ].Table.Limit;
 
 	return S_OK;
 }
@@ -629,7 +631,8 @@ HRESULT WhSiSetupInterruptDescriptorTable( WHSE_PARTITION* Partition, WHSE_REGIS
 	// Allocate two pages, one for the IDT
 	//
 	uintptr_t idtHva = 0;
-	uintptr_t idtGva = 0xfffff800'00002000;
+	//uintptr_t idtGva = 0xfffff800'00002000;
+	uintptr_t idtGva = 0;
 	auto hresult = WhSeAllocateGuestVirtualMemory( Partition, &idtHva, &idtGva, PAGE_SIZE, WHvMapGpaRangeFlagRead | WHvMapGpaRangeFlagWrite );
 	if ( FAILED( hresult ) )
 		return hresult;
@@ -637,7 +640,8 @@ HRESULT WhSiSetupInterruptDescriptorTable( WHSE_PARTITION* Partition, WHSE_REGIS
 	// The other one to trap ISR access
 	//
 	uintptr_t idtTrapHva = 0;
-	uintptr_t idtTrapGva = 0xfffff800'00003000;
+	//uintptr_t idtTrapGva = 0xfffff800'00003000;
+	uintptr_t idtTrapGva = 0;
 	hresult = WhSeAllocateGuestVirtualMemory( Partition, &idtTrapHva, &idtTrapGva, PAGE_SIZE, WHvMapGpaRangeFlagRead | WHvMapGpaRangeFlagWrite );
 	if ( FAILED( hresult ) )
 		return hresult;

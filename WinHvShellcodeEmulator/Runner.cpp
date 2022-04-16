@@ -308,7 +308,8 @@ DWORD WINAPI Run( const RUN_OPTIONS& options ) {
 	// Allocate stack
 	//
 	uintptr_t stackHva = 0;
-	uintptr_t stackGva = 0x00007FFF'00000000 - 0x1000000;
+	//uintptr_t stackGva = 0x00007FFF'00000000 - 0x1000000;
+	uintptr_t stackGva = 0;
 	size_t stackSize = 1 * 1024 * 1024;
 	if ( FAILED( WhSeAllocateGuestVirtualMemory( partition, &stackHva, &stackGva, stackSize, WHvMapGpaRangeFlagRead | WHvMapGpaRangeFlagWrite ) ) )
 		EXIT_WITH_MESSAGE( "Failed to allocate stack" );
