@@ -405,7 +405,7 @@ HRESULT WhSiInsertPageTableEntry( WHSE_PARTITION* Partition, uintptr_t VirtualAd
 
 		*ppte = pte;
 
-		WHSE_ALLOCATION_NODE node {
+		/*WHSE_ALLOCATION_NODE node {
 			//.BlockType = MEMORY_BLOCK_TYPE:MemoryBlockPhysical,
 			.BlockType = MEMORY_BLOCK_TYPE:MemoryBlockPte,
 			.HostVirtualAddress = 0,
@@ -416,7 +416,7 @@ HRESULT WhSiInsertPageTableEntry( WHSE_PARTITION* Partition, uintptr_t VirtualAd
 
 		hresult = WhSeInsertAllocationTrackingNode( Partition, node );
 		if ( FAILED( hresult ) )
-			return hresult;
+			return hresult;*/
 	}
 
 	return S_OK;
