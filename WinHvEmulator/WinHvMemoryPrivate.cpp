@@ -15,7 +15,7 @@ HRESULT WhSpInsertPageTableEntry( WHSE_PARTITION* Partition, PMMPTE_HARDWARE Par
 	uintptr_t gpa = 0;
 	uintptr_t hva = 0;
 
-	auto hresult = WhSiAllocateGuestPhysicalMemory( Partition, &hva, &gpa, PAGE_SIZE, WHvMapGpaRangeFlagRead | WHvMapGpaRangeFlagWrite );
+	auto hresult = WhSeAllocateGuestPhysicalMemory( Partition, &hva, &gpa, PAGE_SIZE, WHvMapGpaRangeFlagRead | WHvMapGpaRangeFlagWrite );
 	if ( FAILED( hresult ) )
 		return hresult;
 

@@ -155,10 +155,6 @@ HRESULT WhSiSuggestPhysicalAddress( WHSE_PARTITION* Partition, size_t Size, uint
 //
 HRESULT WhSiSuggestVirtualAddress( WHSE_PARTITION* Partition, size_t Size, uintptr_t* VirtualAddress, WHSE_PROCESSOR_MODE Mode );
 
-// Internal helper to allocate host memory to guest physical memory
-//
-HRESULT WhSiAllocateGuestPhysicalMemory( WHSE_PARTITION* Partition, uintptr_t* HostVa, uintptr_t* GuestPa, size_t Size, WHSE_MEMORY_ACCESS_FLAGS Flags );
-
 // Internal function to setup paging
 //
 HRESULT WhSiSetupPaging( WHSE_PARTITION* Partition, uintptr_t* Pml4PhysicalAddress );

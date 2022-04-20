@@ -28,7 +28,7 @@ void FilterNodesByPhysicalAddress( PDLIST_HEADER Destination, PDLIST_HEADER Sour
 	WHSE_ALLOCATION_NODE* head = ( WHSE_ALLOCATION_NODE* ) GetDListHead( Source );
 
 	for ( WHSE_ALLOCATION_NODE* current = head; current != NULL; current = ( WHSE_ALLOCATION_NODE* ) current->Next ) {
-		if ( current->BlockType == MemoryBlockPhysical ) {
+		if ( current->BlockType == MemoryBlockPhysical || current->BlockType == MemoryBlockVirtual ) {
 			WHSE_ALLOCATION_NODE* entry = ( WHSE_ALLOCATION_NODE* ) malloc( sizeof( WHSE_ALLOCATION_NODE ) );
 			memcpy( entry, current, sizeof( WHSE_ALLOCATION_NODE ) );
 			PushBackDListEntry( Destination, entry );
@@ -131,11 +131,11 @@ HRESULT WhSiSuggestPhysicalAddress( WHSE_PARTITION* Partition, size_t Size, uint
 
 	// Build the filtered list
 	//
-	/*FilterNodesByPhysicalAddress(&physicalNodesList, &( arena->AllocatedMemoryBlocks ));*/
+	/*FilterNodesByPhysicalAddress( &physicalNodesList, &( arena->AllocatedMemoryBlocks ) );*/
 
 	// Sort the filtered list
 	//
-	/*SortNodesByPhysicalAddress(&physicalNodesList);*/
+	/*SortNodesByPhysicalAddress( &physicalNodesList );*/
 	SortNodesByPhysicalAddress( &( arena->AllocatedMemoryBlocks ) );
 
 	// Iterate nodes from head to the one before the tail
@@ -153,7 +153,7 @@ HRESULT WhSiSuggestPhysicalAddress( WHSE_PARTITION* Partition, size_t Size, uint
 			}
 		}
 
-		//if ( suggestedAddress == 0 && current == ( WHSE_ALLOCATION_NODE* ) GetDListTail( &physicalNodesList ) ) {
+		/*if ( suggestedAddress == 0 && current == ( WHSE_ALLOCATION_NODE* ) GetDListTail( &physicalNodesList ) ) {*/
 		if ( suggestedAddress == 0 && current == ( WHSE_ALLOCATION_NODE* ) GetDListTail( &( arena->AllocatedMemoryBlocks ) ) ) {
 			// Suggest address at the tail
 			//
@@ -163,7 +163,7 @@ HRESULT WhSiSuggestPhysicalAddress( WHSE_PARTITION* Partition, size_t Size, uint
 		suggestedAddress = lowest;
 	}
 
-	/*FlushDList(&physicalNodesList);*/
+	/*FlushDList( &physicalNodesList );*/
 
 	if ( suggestedAddress < lowest || suggestedAddress >= ( highest - Size ) )
 		return HRESULT_FROM_WIN32( ERROR_NOT_FOUND );
@@ -256,34 +256,6 @@ HRESULT WhSiSuggestVirtualAddress( WHSE_PARTITION* Partition, size_t Size, uintp
 	return S_OK;
 }
 
-
-/**
- * @brief Internal helper to allocate host memory to guest physical memory
- *
- * @param Partition The VM partition
- * @param HostVa
- * @param GuestPa
- * @param Size
- * @param Flags
- * @return A result code
- */
-HRESULT WhSiAllocateGuestPhysicalMemory( WHSE_PARTITION* Partition, uintptr_t* HostVa, uintptr_t* GuestPa, size_t Size, WHSE_MEMORY_ACCESS_FLAGS Flags ) {
-	uintptr_t physicalAddress = 0;
-	auto hresult = WhSiSuggestPhysicalAddress( Partition, Size, &physicalAddress );
-	if ( FAILED( hresult ) )
-		return hresult;
-
-	uintptr_t hostVa = 0;
-	hresult = WhSeAllocateGuestPhysicalMemory( Partition, &hostVa, &physicalAddress, Size, Flags );
-	if ( FAILED( hresult ) )
-		return hresult;
-
-	*HostVa = hostVa;
-	*GuestPa = physicalAddress;
-
-	return S_OK;
-}
-
 /**
  * @brief Internal function to setup paging
  *
@@ -301,7 +273,7 @@ HRESULT WhSiSetupPaging( WHSE_PARTITION* Partition, uintptr_t* Pml4PhysicalAddre
 	//
 	uintptr_t pml4Gpa = 0;
 	uintptr_t pml4Hva = 0;
-	auto hresult = WhSiAllocateGuestPhysicalMemory( Partition, &pml4Hva, &pml4Gpa, PAGE_SIZE, WHvMapGpaRangeFlagRead | WHvMapGpaRangeFlagWrite );
+	auto hresult = WhSeAllocateGuestPhysicalMemory( Partition, &pml4Hva, &pml4Gpa, PAGE_SIZE, WHvMapGpaRangeFlagRead | WHvMapGpaRangeFlagWrite );
 	if ( FAILED( hresult ) )
 		return hresult;
 
@@ -434,7 +406,8 @@ HRESULT WhSiInsertPageTableEntry( WHSE_PARTITION* Partition, uintptr_t VirtualAd
 		*ppte = pte;
 
 		WHSE_ALLOCATION_NODE node {
-			.BlockType = MEMORY_BLOCK_TYPE::MemoryBlockPhysical,
+			.BlockType = MEMORY_BLOCK_TYPE:MemoryBlockPhysical,
+			//.BlockType = MEMORY_BLOCK_TYPE:MemoryBlockPte,
 			.HostVirtualAddress = 0,
 			.GuestPhysicalAddress = gpa,
 			.GuestVirtualAddress = 0,

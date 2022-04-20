@@ -227,13 +227,6 @@ HRESULT WhSeAllocateGuestVirtualMemory( WHSE_PARTITION* Partition, uintptr_t* Ho
 	if ( existingNode != nullptr )
 		return HRESULT_FROM_WIN32( ERROR_INTERNAL_ERROR );
 
-	// Allocate memory into host
-	//
-	auto protectionFlags = AccessFlagsToProtectionFlags( Flags );
-	auto allocatedHostVa = ::VirtualAlloc( nullptr, size, MEM_COMMIT | MEM_RESERVE, protectionFlags );
-	if ( allocatedHostVa == nullptr )
-		return WhSeGetLastHresult();
-
 	// Compute starting and ending guest virtual addresses
 	//
 	auto startingGva = ALIGN( suggestedGva );
@@ -251,6 +244,13 @@ HRESULT WhSeAllocateGuestVirtualMemory( WHSE_PARTITION* Partition, uintptr_t* Ho
 	hresult = WhSeTranslateGvaToGpa( Partition, startingGva, &gpa, nullptr );
 	if ( FAILED( hresult ) )
 		return hresult;
+
+	// Allocate memory into host
+	//
+	auto protectionFlags = AccessFlagsToProtectionFlags( Flags );
+	auto allocatedHostVa = ::VirtualAlloc( nullptr, size, MEM_COMMIT | MEM_RESERVE, protectionFlags );
+	if ( allocatedHostVa == nullptr )
+		return WhSeGetLastHresult();
 
 	hresult = ::WHvMapGpaRange( Partition->Handle, allocatedHostVa, static_cast< WHV_GUEST_PHYSICAL_ADDRESS >( gpa ), size, Flags );
 	if ( FAILED( hresult ) ) {
@@ -326,7 +326,7 @@ HRESULT WHSEAPI WhSeMapHostToGuestVirtualMemory( WHSE_PARTITION* Partition, uint
 	auto startingGva = ALIGN( suggestedGva );
 	auto endingGva = ALIGN_UP( startingGva + size );
 
-	// Setup matching PTEs (and allocate guest physical memory accordingly)
+	// Setup matching PTEs
 	//
 	for ( auto gva = startingGva; gva < endingGva; gva += PAGE_SIZE ) {
 		hresult = WhSiInsertPageTableEntry( Partition, gva );
@@ -514,52 +514,21 @@ HRESULT WhSeTranslateGvaToGpa( WHSE_PARTITION* Partition, uintptr_t VirtualAddre
 
 	WHV_TRANSLATE_GVA_FLAGS flags = WHvTranslateGvaFlagValidateRead | WHvTranslateGvaFlagValidateWrite /*| WHvTranslateGvaFlagPrivilegeExempt*/;
 
-	auto hresult = S_OK;
-	auto tries = 0;
-	
-	do {
-		hresult = ::WHvTranslateGva(
-			Partition->Handle,
-			Partition->VirtualProcessor.Index,
-			VirtualAddress,
-			flags,
-			&translationResult,
-			&gpa
-		);
-
-		if ( FAILED( hresult ) )
-			return hresult;
-
-		switch ( translationResult.ResultCode )
-		{
-			case WHvTranslateGvaResultPageNotPresent:
-				hresult = WhSiInsertPageTableEntry( Partition, VirtualAddress );
-				break;
-			case WHvTranslateGvaResultPrivilegeViolation:
-			case WHvTranslateGvaResultInvalidPageTableFlags:
-			case WHvTranslateGvaResultGpaUnmapped:
-			case WHvTranslateGvaResultGpaNoReadAccess:
-			case WHvTranslateGvaResultGpaNoWriteAccess:
-			case WHvTranslateGvaResultGpaIllegalOverlayAccess:
-			case WHvTranslateGvaResultIntercept:
-				DebugBreak();
-				break;
-			case WHvTranslateGvaResultSuccess:
-				break;
-			default:
-				break;
-		}
-
-		tries++;
-	} while ( tries < 2 && hresult == S_OK && translationResult.ResultCode != WHvTranslateGvaResultSuccess );
-
+	auto hresult = ::WHvTranslateGva(
+		Partition->Handle,
+		Partition->VirtualProcessor.Index,
+		VirtualAddress,
+		flags,
+		&translationResult,
+		&gpa
+	);
 	if ( FAILED( hresult ) )
 		return hresult;
 
-	*PhysicalAddress = gpa;
-
 	if ( TranslationResult != nullptr )
 		*TranslationResult = translationResult;
+
+	*PhysicalAddress = gpa;
 
 	return hresult;
 }
