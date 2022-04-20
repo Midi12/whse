@@ -131,16 +131,16 @@ HRESULT WhSiSuggestPhysicalAddress( WHSE_PARTITION* Partition, size_t Size, uint
 
 	// Build the filtered list
 	//
-	/*FilterNodesByPhysicalAddress( &physicalNodesList, &( arena->AllocatedMemoryBlocks ) );*/
+	//FilterNodesByPhysicalAddress( &physicalNodesList, &( arena->AllocatedMemoryBlocks ) );
 
 	// Sort the filtered list
 	//
-	/*SortNodesByPhysicalAddress( &physicalNodesList );*/
+	//SortNodesByPhysicalAddress( &physicalNodesList );
 	SortNodesByPhysicalAddress( &( arena->AllocatedMemoryBlocks ) );
 
 	// Iterate nodes from head to the one before the tail
 	//
-	/*WHSE_ALLOCATION_NODE* head = ( WHSE_ALLOCATION_NODE* ) GetDListHead(&physicalNodesList);*/
+	//WHSE_ALLOCATION_NODE* head = ( WHSE_ALLOCATION_NODE* ) GetDListHead( &physicalNodesList );
 	WHSE_ALLOCATION_NODE* head = ( WHSE_ALLOCATION_NODE* ) GetDListHead( &( arena->AllocatedMemoryBlocks ) );
 	if ( head != NULL ) {
 		WHSE_ALLOCATION_NODE* current = NULL;
@@ -153,7 +153,7 @@ HRESULT WhSiSuggestPhysicalAddress( WHSE_PARTITION* Partition, size_t Size, uint
 			}
 		}
 
-		/*if ( suggestedAddress == 0 && current == ( WHSE_ALLOCATION_NODE* ) GetDListTail( &physicalNodesList ) ) {*/
+		//if ( suggestedAddress == 0 && current == ( WHSE_ALLOCATION_NODE* ) GetDListTail( &physicalNodesList ) ) {
 		if ( suggestedAddress == 0 && current == ( WHSE_ALLOCATION_NODE* ) GetDListTail( &( arena->AllocatedMemoryBlocks ) ) ) {
 			// Suggest address at the tail
 			//
@@ -163,7 +163,7 @@ HRESULT WhSiSuggestPhysicalAddress( WHSE_PARTITION* Partition, size_t Size, uint
 		suggestedAddress = lowest;
 	}
 
-	/*FlushDList( &physicalNodesList );*/
+	//FlushDList( &physicalNodesList );
 
 	if ( suggestedAddress < lowest || suggestedAddress >= ( highest - Size ) )
 		return HRESULT_FROM_WIN32( ERROR_NOT_FOUND );
@@ -406,8 +406,8 @@ HRESULT WhSiInsertPageTableEntry( WHSE_PARTITION* Partition, uintptr_t VirtualAd
 		*ppte = pte;
 
 		WHSE_ALLOCATION_NODE node {
-			.BlockType = MEMORY_BLOCK_TYPE:MemoryBlockPhysical,
-			//.BlockType = MEMORY_BLOCK_TYPE:MemoryBlockPte,
+			//.BlockType = MEMORY_BLOCK_TYPE:MemoryBlockPhysical,
+			.BlockType = MEMORY_BLOCK_TYPE:MemoryBlockPte,
 			.HostVirtualAddress = 0,
 			.GuestPhysicalAddress = gpa,
 			.GuestVirtualAddress = 0,
