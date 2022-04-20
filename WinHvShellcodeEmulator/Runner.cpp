@@ -338,10 +338,10 @@ DWORD WINAPI Run( const RUN_OPTIONS& options ) {
 		.Partition = partition
 	};
 
-	// test code
-	// alloc deadbeef va
-	// free deadbeef va
-	// test code
+	uintptr_t gpa { };
+	auto hresult = WhSeTranslateGvaToGpa( params.Partition, params.Stack, &gpa, nullptr );
+	if ( FAILED( hresult ) )
+		return hresult;
 
 	printf( "Starting the processor ...\n" );
 

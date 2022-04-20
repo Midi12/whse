@@ -434,7 +434,7 @@ HRESULT WhSiInsertPageTableEntry( WHSE_PARTITION* Partition, uintptr_t VirtualAd
 		*ppte = pte;
 
 		WHSE_ALLOCATION_NODE node {
-			.BlockType = MEMORY_BLOCK_TYPE::MemoryBlockPte,
+			.BlockType = MEMORY_BLOCK_TYPE::MemoryBlockPhysical,
 			.HostVirtualAddress = 0,
 			.GuestPhysicalAddress = gpa,
 			.GuestVirtualAddress = 0,

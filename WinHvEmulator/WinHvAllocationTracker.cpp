@@ -117,14 +117,11 @@ HRESULT WhSeFindAllocationNodeByGva( WHSE_PARTITION* Partition, uintptr_t GuestV
 	auto tracker = &( Partition->MemoryLayout.MemoryArena.AllocatedMemoryBlocks );
 
 	auto first = reinterpret_cast< WHSE_ALLOCATION_NODE* >( GetDListHead( tracker ) );
-	/*if ( first == nullptr )
-		return HRESULT_FROM_WIN32( ERROR_NO_MORE_ITEMS );*/
 
 	// Iterate over the list
 	//
 	auto current = first;
 	while ( current != nullptr ) {
-		//if ( current->GuestVirtualAddress == GuestVa ) {
 		if ( current->GuestVirtualAddress <= GuestVa && GuestVa < ( current->GuestVirtualAddress + current->Size ) ) {
 			*Node = current;
 			break;
@@ -157,15 +154,11 @@ HRESULT WhSeFindAllocationNodeByGpa( WHSE_PARTITION* Partition, uintptr_t GuestP
 	auto tracker = &( Partition->MemoryLayout.MemoryArena.AllocatedMemoryBlocks );
 
 	auto first = reinterpret_cast< WHSE_ALLOCATION_NODE* >( GetDListHead( tracker ) );
-	/*if ( first == nullptr )
-		return HRESULT_FROM_WIN32( ERROR_NO_MORE_ITEMS );*/
 
 	// Iterate over the list
 	//
 	auto current = first;
 	while ( current != nullptr ) {
-		/*if ( current->BlockType != MEMORY_BLOCK_TYPE::MemoryBlockPte
-			&& current->GuestPhysicalAddress == GuestPa ) { */
 		if ( current->GuestPhysicalAddress <= GuestPa && GuestPa < ( current->GuestPhysicalAddress + current->Size ) ) {
 			*Node = current;
 			break;
