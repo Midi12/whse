@@ -334,14 +334,23 @@ DWORD WINAPI Run( const RUN_OPTIONS& options ) {
 	//
 	RUN_PARAMS params {
 		.Entrypoint = codeGva,
-		.Stack = stackGva + stackSize - PAGE_SIZE, // set rsp to the end of the allocated stack range as stack "grows downward" (let 1 page on top for "safety")
+		.Stack = stackGva + stackSize - ( 2 * PAGE_SIZE ), // set rsp to the end of the allocated stack range as stack "grows downward" (let 2 page on top for "safety")
 		.Partition = partition
 	};
 
 	uintptr_t gpa { };
-	auto hresult = WhSeTranslateGvaToGpa( params.Partition, params.Stack, &gpa, nullptr );
-	if ( FAILED( hresult ) )
-		return hresult;
+	WHV_TRANSLATE_GVA_RESULT r { };
+	WhSeTranslateGvaToGpa( params.Partition, params.Stack, &gpa, &r );
+	WhSeTranslateGvaToGpa( params.Partition, stackGva, &gpa, &r );
+	WhSeTranslateGvaToGpa( params.Partition, stackGva + PAGE_SIZE, &gpa, &r );
+	WhSeTranslateGvaToGpa( params.Partition, stackGva + (2*PAGE_SIZE), &gpa, &r );
+	WhSeTranslateGvaToGpa( params.Partition, stackGva + stackSize, &gpa, &r );
+	WhSeTranslateGvaToGpa( params.Partition, stackGva + stackSize - ( 2 * PAGE_SIZE ), &gpa, &r );
+	WhSeTranslateGvaToGpa( params.Partition, stackGva + stackSize - ( 10 * PAGE_SIZE ), &gpa, &r );
+	WhSeTranslateGvaToGpa( params.Partition, 0xffff800000002000, &gpa, &r ); // TSS RSP0 GVA (size = 1MiB)
+	WhSeTranslateGvaToGpa( params.Partition, 0xffff800000002000 + PAGE_SIZE, &gpa, &r );
+	WhSeTranslateGvaToGpa( params.Partition, 0xffff800000002000 + ( 2 * PAGE_SIZE ), &gpa, &r );
+	WhSeTranslateGvaToGpa( params.Partition, 0x1000, &gpa, &r );
 
 	printf( "Starting the processor ...\n" );
 

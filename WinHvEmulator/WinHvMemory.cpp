@@ -87,16 +87,6 @@ HRESULT WhSeAllocateGuestPhysicalMemory( WHSE_PARTITION* Partition, uintptr_t* H
 	if ( allocatedHostVa == nullptr )
 		return WhSeGetLastHresult();
 
-	// Create the allocated range into the guest physical address space
-	//
-	hresult = ::WHvMapGpaRange( Partition->Handle, allocatedHostVa, static_cast< WHV_GUEST_PHYSICAL_ADDRESS >( suggestedGpa ), size, Flags );
-	if ( FAILED( hresult ) ) {
-		if ( allocatedHostVa != nullptr )
-			::VirtualFree( allocatedHostVa, 0, MEM_RELEASE );
-
-		return hresult;
-	}
-
 	WHSE_ALLOCATION_NODE node {
 		.BlockType = MEMORY_BLOCK_TYPE::MemoryBlockPhysical,
 		.HostVirtualAddress = reinterpret_cast< uintptr_t >( allocatedHostVa ),
@@ -108,6 +98,16 @@ HRESULT WhSeAllocateGuestPhysicalMemory( WHSE_PARTITION* Partition, uintptr_t* H
 	hresult = WhSeInsertAllocationTrackingNode( Partition, node );
 	if ( FAILED( hresult ) )
 		return hresult;
+
+	// Create the allocated range into the guest physical address space
+	//
+	hresult = ::WHvMapGpaRange( Partition->Handle, allocatedHostVa, static_cast< WHV_GUEST_PHYSICAL_ADDRESS >( suggestedGpa ), size, Flags );
+	if ( FAILED( hresult ) ) {
+		if ( allocatedHostVa != nullptr )
+			::VirtualFree( allocatedHostVa, 0, MEM_RELEASE );
+
+		return hresult;
+	}
 
 	*HostVa = reinterpret_cast< uintptr_t >( allocatedHostVa );
 	*GuestPa = suggestedGpa;
@@ -232,19 +232,6 @@ HRESULT WhSeAllocateGuestVirtualMemory( WHSE_PARTITION* Partition, uintptr_t* Ho
 	auto startingGva = ALIGN( suggestedGva );
 	auto endingGva = ALIGN_UP( startingGva + size );
 
-	// Setup matching PTEs
-	//
-	for ( auto gva = startingGva; gva < endingGva; gva += PAGE_SIZE ) {
-		hresult = WhSiInsertPageTableEntry( Partition, gva );
-		if ( FAILED( hresult ) )
-			return hresult;
-	}
-
-	uintptr_t gpa { };
-	hresult = WhSeTranslateGvaToGpa( Partition, startingGva, &gpa, nullptr );
-	if ( FAILED( hresult ) )
-		return hresult;
-
 	// Allocate memory into host
 	//
 	auto protectionFlags = AccessFlagsToProtectionFlags( Flags );
@@ -252,18 +239,15 @@ HRESULT WhSeAllocateGuestVirtualMemory( WHSE_PARTITION* Partition, uintptr_t* Ho
 	if ( allocatedHostVa == nullptr )
 		return WhSeGetLastHresult();
 
-	hresult = ::WHvMapGpaRange( Partition->Handle, allocatedHostVa, static_cast< WHV_GUEST_PHYSICAL_ADDRESS >( gpa ), size, Flags );
-	if ( FAILED( hresult ) ) {
-		if ( allocatedHostVa != nullptr )
-			::VirtualFree( allocatedHostVa, 0, MEM_RELEASE );
-
+	uintptr_t suggestedGpa = 0;
+	hresult = WhSiSuggestPhysicalAddress( Partition, size, &suggestedGpa );
+	if ( FAILED( hresult ) )
 		return hresult;
-	}
 
 	WHSE_ALLOCATION_NODE node {
 		.BlockType = MEMORY_BLOCK_TYPE::MemoryBlockVirtual,
 		.HostVirtualAddress = reinterpret_cast< uintptr_t >( allocatedHostVa ),
-		.GuestPhysicalAddress = gpa,
+		.GuestPhysicalAddress = suggestedGpa,
 		.GuestVirtualAddress = startingGva,
 		.Size = size
 	};
@@ -271,6 +255,22 @@ HRESULT WhSeAllocateGuestVirtualMemory( WHSE_PARTITION* Partition, uintptr_t* Ho
 	hresult = WhSeInsertAllocationTrackingNode( Partition, node );
 	if ( FAILED( hresult ) )
 		return hresult;
+
+	// Setup matching PTEs
+	//
+	for ( auto gva = startingGva, page = suggestedGpa; gva < endingGva; gva += PAGE_SIZE, page += PAGE_SIZE ) {
+		hresult = WhSiInsertPageTableEntry( Partition, gva, page);
+		if ( FAILED( hresult ) )
+			return hresult;
+	}
+
+	hresult = ::WHvMapGpaRange( Partition->Handle, allocatedHostVa, static_cast< WHV_GUEST_PHYSICAL_ADDRESS >( suggestedGpa ), size, Flags );
+	if ( FAILED( hresult ) ) {
+		if ( allocatedHostVa != nullptr )
+			::VirtualFree( allocatedHostVa, 0, MEM_RELEASE );
+
+		return hresult;
+	}
 
 	*HostVa = reinterpret_cast< uintptr_t >( allocatedHostVa );
 	*GuestVa = startingGva;
@@ -326,32 +326,32 @@ HRESULT WHSEAPI WhSeMapHostToGuestVirtualMemory( WHSE_PARTITION* Partition, uint
 	auto startingGva = ALIGN( suggestedGva );
 	auto endingGva = ALIGN_UP( startingGva + size );
 
-	// Setup matching PTEs
-	//
-	for ( auto gva = startingGva; gva < endingGva; gva += PAGE_SIZE ) {
-		hresult = WhSiInsertPageTableEntry( Partition, gva );
-		if ( FAILED( hresult ) )
-			return hresult;
-	}
-
-	uintptr_t gpa { };
-	hresult = WhSeTranslateGvaToGpa( Partition, startingGva, &gpa, nullptr );
-	if ( FAILED( hresult ) )
-		return hresult;
-
-	hresult = ::WHvMapGpaRange( Partition->Handle, reinterpret_cast< PVOID >( HostVa ), static_cast< WHV_GUEST_PHYSICAL_ADDRESS >( gpa ), size, Flags );
+	uintptr_t suggestedGpa = 0;
+	hresult = WhSiSuggestPhysicalAddress( Partition, size, &suggestedGpa );
 	if ( FAILED( hresult ) )
 		return hresult;
 
 	WHSE_ALLOCATION_NODE node {
 		.BlockType = MEMORY_BLOCK_TYPE::MemoryBlockVirtual,
 		.HostVirtualAddress = HostVa,
-		.GuestPhysicalAddress = gpa,
+		.GuestPhysicalAddress = suggestedGpa,
 		.GuestVirtualAddress = startingGva,
 		.Size = size
 	};
 
 	hresult = WhSeInsertAllocationTrackingNode( Partition, node );
+	if ( FAILED( hresult ) )
+		return hresult;
+
+	// Setup matching PTEs
+	//
+	for ( auto gva = startingGva, page = suggestedGpa; gva < endingGva; gva += PAGE_SIZE, page += PAGE_SIZE ) {
+		hresult = WhSiInsertPageTableEntry( Partition, gva, page );
+		if ( FAILED( hresult ) )
+			return hresult;
+	}
+
+	hresult = ::WHvMapGpaRange( Partition->Handle, reinterpret_cast< PVOID >( HostVa ), static_cast< WHV_GUEST_PHYSICAL_ADDRESS >( suggestedGpa ), size, Flags );
 	if ( FAILED( hresult ) )
 		return hresult;
 
@@ -512,7 +512,7 @@ HRESULT WhSeTranslateGvaToGpa( WHSE_PARTITION* Partition, uintptr_t VirtualAddre
 	WHV_GUEST_PHYSICAL_ADDRESS gpa;
 	WHV_TRANSLATE_GVA_RESULT translationResult { };
 
-	WHV_TRANSLATE_GVA_FLAGS flags = WHvTranslateGvaFlagValidateRead | WHvTranslateGvaFlagValidateWrite /*| WHvTranslateGvaFlagPrivilegeExempt*/;
+	WHV_TRANSLATE_GVA_FLAGS flags = WHvTranslateGvaFlagValidateRead | WHvTranslateGvaFlagValidateWrite | WHvTranslateGvaFlagPrivilegeExempt;
 
 	auto hresult = ::WHvTranslateGva(
 		Partition->Handle,

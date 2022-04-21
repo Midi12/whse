@@ -162,7 +162,7 @@ HRESULT WhSiSetupPaging( WHSE_PARTITION* Partition, uintptr_t* Pml4PhysicalAddre
 // Internal function to insert page table in the paging directory
 // Allocate PML4 entry, PDP entry, PD entry and PT entry
 //
-HRESULT WhSiInsertPageTableEntry( WHSE_PARTITION* Partition, uintptr_t VirtualAddress );
+HRESULT WhSiInsertPageTableEntry( WHSE_PARTITION* Partition, uintptr_t VirtualAddress, uintptr_t PhysicalAddress );
 
 // Find a suitable Guest VA
 //
