@@ -68,68 +68,6 @@ static_assert( sizeof( GDT_ENTRY ) == 8 );
 
 constexpr static size_t NUMBER_OF_GDT_DESCRIPTORS = 5;
 
-#define X64_TASK_STATE_SEGMENT_NUMBER_OF_ISTS 7
-#define X64_TASK_STATE_SEGMENT_NUMBER_OF_SPS 3
-
-#pragma pack( push, 1 )
-struct _X64_TASK_STATE_SEGMENT {
-    uint32_t Reserved00;
-
-    // The Stack pointers used to load the stack on a privilege level change
-    // (from a lower privileged ring to a higher one)
-    //
-    union {
-        struct {
-            uint64_t Rsp0;
-            uint64_t Rsp1;
-            uint64_t Rsp2;
-        };
-        uint64_t Rsp[ X64_TASK_STATE_SEGMENT_NUMBER_OF_SPS ];
-    };
-
-    uint32_t Reserved1C;
-    uint32_t Reserved20;
-
-    // Interrupt Stack Table
-    // The Stack Pointers that are used to load the stack when an entry in the
-    // Interrupt Stack Table has an IST value other than 0
-    //
-    union {
-        struct {
-            uint64_t Ist1;
-            uint64_t Ist2;
-            uint64_t Ist3;
-            uint64_t Ist4;
-            uint64_t Ist5;
-            uint64_t Ist6;
-            uint64_t Ist7;
-        };
-        uint64_t Ist[ X64_TASK_STATE_SEGMENT_NUMBER_OF_ISTS ];
-    };
-
-    uint32_t Reserved5C;
-    uint32_t Reserved60;
-    uint16_t Reserved64;
-
-    // I/O Map base Address Field
-    // It contains a 16-bit offset from the base of the TSS to the
-    // I/O Permission Bit Map
-    //
-    uint16_t Iopb;
-};
-#pragma pack( pop )
-
-static_assert( sizeof( _X64_TASK_STATE_SEGMENT ) == 0x68 );
-
-typedef struct _X64_TASK_STATE_SEGMENT X64_TASK_STATE_SEGMENT;
-typedef struct _X64_TASK_STATE_SEGMENT* PX64_TASK_STATE_SEGMENT;
-
-#define X64_TASK_STATE_SEGMENT_IOPB_NONE 0
-
-constexpr uint16_t TssComputeIopbOffset( uint16_t offset ) {
-    return offset != X64_TASK_STATE_SEGMENT_IOPB_NONE ? offset : sizeof( X64_TASK_STATE_SEGMENT );
-}
-
 #pragma pack( push, 1 )
 struct _X64_TSS_ENTRY {
     struct _GDT_ENTRY GdtEntry;

@@ -598,6 +598,8 @@ HRESULT WhSiSetupGlobalDescriptorTable( WHSE_PARTITION* Partition, WHSE_REGISTER
 	//Registers[ Tr ].Segment.Base = Registers[ Gdtr ].Table.Base;
 	//Registers[ Tr ].Segment.Limit = Registers[ Gdtr ].Table.Limit;
 
+	Partition->VirtualProcessor.Tss = reinterpret_cast< PX64_TASK_STATE_SEGMENT >( tssHva );
+
 	return S_OK;
 }
 

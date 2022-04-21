@@ -104,6 +104,68 @@ static constexpr uint32_t g_registers_count = RTL_NUMBER_OF( g_registers );
 
 using WHSE_REGISTERS = WHSE_REGISTER_VALUE[ g_registers_count ];
 
+#define X64_TASK_STATE_SEGMENT_NUMBER_OF_ISTS 7
+#define X64_TASK_STATE_SEGMENT_NUMBER_OF_SPS 3
+
+#pragma pack( push, 1 )
+struct _X64_TASK_STATE_SEGMENT {
+	uint32_t Reserved00;
+
+	// The Stack pointers used to load the stack on a privilege level change
+	// (from a lower privileged ring to a higher one)
+	//
+	union {
+		struct {
+			uint64_t Rsp0;
+			uint64_t Rsp1;
+			uint64_t Rsp2;
+		};
+		uint64_t Rsp[ X64_TASK_STATE_SEGMENT_NUMBER_OF_SPS ];
+	};
+
+	uint32_t Reserved1C;
+	uint32_t Reserved20;
+
+	// Interrupt Stack Table
+	// The Stack Pointers that are used to load the stack when an entry in the
+	// Interrupt Stack Table has an IST value other than 0
+	//
+	union {
+		struct {
+			uint64_t Ist1;
+			uint64_t Ist2;
+			uint64_t Ist3;
+			uint64_t Ist4;
+			uint64_t Ist5;
+			uint64_t Ist6;
+			uint64_t Ist7;
+		};
+		uint64_t Ist[ X64_TASK_STATE_SEGMENT_NUMBER_OF_ISTS ];
+	};
+
+	uint32_t Reserved5C;
+	uint32_t Reserved60;
+	uint16_t Reserved64;
+
+	// I/O Map base Address Field
+	// It contains a 16-bit offset from the base of the TSS to the
+	// I/O Permission Bit Map
+	//
+	uint16_t Iopb;
+};
+#pragma pack( pop )
+
+static_assert( sizeof( _X64_TASK_STATE_SEGMENT ) == 0x68 );
+
+typedef struct _X64_TASK_STATE_SEGMENT X64_TASK_STATE_SEGMENT;
+typedef struct _X64_TASK_STATE_SEGMENT* PX64_TASK_STATE_SEGMENT;
+
+#define X64_TASK_STATE_SEGMENT_IOPB_NONE 0
+
+constexpr uint16_t TssComputeIopbOffset( uint16_t offset ) {
+	return offset != X64_TASK_STATE_SEGMENT_IOPB_NONE ? offset : sizeof( X64_TASK_STATE_SEGMENT );
+}
+
 /**
  * @brief A structure representing a virtual processor
  *
@@ -114,6 +176,7 @@ typedef struct _WHSE_VIRTUAL_PROCESSOR {
 	uint32_t Index;
 	WHSE_PROCESSOR_MODE Mode;
 	WHSE_PROCESSOR_VENDOR Vendor;
+	PX64_TASK_STATE_SEGMENT Tss;
 	WHSE_VP_EXIT_CONTEXT ExitContext;
 	WHSE_REGISTERS Registers; // Must be last as it is an array
 } WHSE_VIRTUAL_PROCESSOR, * PWHSE_VIRTUAL_PROCESSOR;
