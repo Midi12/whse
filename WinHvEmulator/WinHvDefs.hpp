@@ -382,8 +382,6 @@ static_assert( sizeof( WHSE_EXIT_CALLBACKS::u ) == sizeof( uintptr_t ) * ( WHSE_
 static_assert( sizeof( WHSE_EXIT_CALLBACKS::Callbacks ) == sizeof( uintptr_t ) * ( WHSE_EXIT_CALLBACK_SLOT::NumberOfCallbacks ), "WHSE_EXIT_CALLBACKS::Callbacks size" );
 static_assert( sizeof( WHSE_EXIT_CALLBACKS::Callbacks ) == sizeof( WHSE_EXIT_CALLBACKS::u ), "Wrong WHSE_EXIT_CALLBACKS::Callbacks or WHSE_EXIT_CALLBACKS::u size" );
 
-typedef WHSE_CALLBACK_RETURNTYPE ( WHSECALLBACKAPI WHSE_ISR_CALLBACK )( _WHSE_PARTITION* Partition );
-
 /**
  * @brief Enumeration to represent the virtual processor ISR callbacks
  */
@@ -437,6 +435,42 @@ enum WHSE_ISR_CALLBACK_SLOT : uint16_t {
 
 	NumberOfInterruptRoutines
 };
+
+constexpr bool IsrHasErrorCode( uint8_t index ) {
+	bool ret = false;
+
+	switch ( index ) {
+		case DoubleFault:
+		case InvalidTSS:
+		case SegmentNotPresent:
+		case StackSegmentFault:
+		case GeneralProtectionFault:
+		case PageFault:
+		case AlignmentCheck:
+		case ControlProtectionException:
+		case VmmCommunicationException:
+		case SecurityException:
+			ret = true;
+	}
+
+	return ret;
+}
+
+/*
+ * @brief A structure to hold the frame of an interrupt
+ */
+struct _X64_INTERRUPT_FRAME {
+	uint64_t Rip;
+	uint64_t Cs;
+	uint64_t Rflags;
+	uint64_t Rsp; // Original rsp
+	uint64_t Ss;
+};
+
+typedef struct _X64_INTERRUPT_FRAME X64_INTERRUPT_FRAME;
+typedef struct _X64_INTERRUPT_FRAME* PX64_INTERRUPT_FRAME;
+
+typedef WHSE_CALLBACK_RETURNTYPE( WHSECALLBACKAPI WHSE_ISR_CALLBACK )( _WHSE_PARTITION* Partition, PX64_INTERRUPT_FRAME Frame, uint32_t ErrorCode );
 
 /**
  * @brief A structure to hold pointers to the virtual processor ISR callbacks

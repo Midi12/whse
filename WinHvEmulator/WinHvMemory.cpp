@@ -210,8 +210,13 @@ HRESULT WhSeAllocateGuestVirtualMemory( WHSE_PARTITION* Partition, uintptr_t* Ho
 
 	auto size = ALIGN_UP( Size );
 
+	PWHSE_ALLOCATION_NODE existingNode = nullptr;
+	auto hresult = WhSeFindAllocationNodeByGva( Partition, *GuestVa, &existingNode );
+	if ( hresult != HRESULT_FROM_WIN32( ERROR_NOT_FOUND ) && FAILED( hresult ) )
+		return hresult;
+
 	uintptr_t suggestedGva = 0;
-	if ( *GuestVa == 0 ) {
+	if ( *GuestVa == 0 || existingNode != nullptr) {
 		auto hresult = WhSiSuggestVirtualAddress( Partition, size, &suggestedGva, Partition->VirtualProcessor.Mode );
 		if ( FAILED( hresult ) )
 			return hresult;
@@ -219,8 +224,8 @@ HRESULT WhSeAllocateGuestVirtualMemory( WHSE_PARTITION* Partition, uintptr_t* Ho
 	else
 		suggestedGva = ALIGN( *GuestVa );
 
-	PWHSE_ALLOCATION_NODE existingNode = nullptr;
-	auto hresult = WhSeFindAllocationNodeByGva( Partition, suggestedGva, &existingNode );
+	existingNode = nullptr;
+	hresult = WhSeFindAllocationNodeByGva( Partition, suggestedGva, &existingNode );
 	if ( hresult != HRESULT_FROM_WIN32( ERROR_NOT_FOUND ) && FAILED( hresult ) )
 		return hresult;
 
@@ -304,8 +309,13 @@ HRESULT WHSEAPI WhSeMapHostToGuestVirtualMemory( WHSE_PARTITION* Partition, uint
 
 	auto size = ALIGN_UP( Size );
 
+	PWHSE_ALLOCATION_NODE existingNode = nullptr;
+	auto hresult = WhSeFindAllocationNodeByGva( Partition, *GuestVa, &existingNode );
+	if ( hresult != HRESULT_FROM_WIN32( ERROR_NOT_FOUND ) && FAILED( hresult ) )
+		return hresult;
+
 	uintptr_t suggestedGva = 0;
-	if ( *GuestVa == 0 ) {
+	if ( *GuestVa == 0 || existingNode != nullptr ) {
 		auto hresult = WhSiSuggestVirtualAddress( Partition, size, &suggestedGva, Partition->VirtualProcessor.Mode );
 		if ( FAILED( hresult ) )
 			return hresult;
@@ -313,8 +323,8 @@ HRESULT WHSEAPI WhSeMapHostToGuestVirtualMemory( WHSE_PARTITION* Partition, uint
 	else
 		suggestedGva = ALIGN( *GuestVa );
 
-	PWHSE_ALLOCATION_NODE existingNode = nullptr;
-	auto hresult = WhSeFindAllocationNodeByGva( Partition, suggestedGva, &existingNode );
+	existingNode = nullptr;
+	hresult = WhSeFindAllocationNodeByGva( Partition, suggestedGva, &existingNode );
 	if ( hresult != HRESULT_FROM_WIN32( ERROR_NOT_FOUND ) && FAILED( hresult ) )
 		return hresult;
 

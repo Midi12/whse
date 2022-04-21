@@ -122,7 +122,7 @@ HRESULT WhSeFindAllocationNodeByGva( WHSE_PARTITION* Partition, uintptr_t GuestV
 	//
 	auto current = first;
 	while ( current != nullptr ) {
-		if ( current->GuestVirtualAddress <= GuestVa && GuestVa < ( current->GuestVirtualAddress + current->Size ) ) {
+		if ( current->BlockType == MEMORY_BLOCK_TYPE::MemoryBlockVirtual && current->GuestVirtualAddress <= GuestVa && GuestVa < ( current->GuestVirtualAddress + current->Size ) ) {
 			*Node = current;
 			break;
 		}

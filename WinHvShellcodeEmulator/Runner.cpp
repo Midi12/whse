@@ -165,13 +165,25 @@ bool OnExit( WHSE_PARTITION* Partition, WHV_VP_EXIT_CONTEXT* VpContext, void* Ex
 
 // Handle Page fault
 //
-bool OnPageFault( WHSE_PARTITION* Partition ) {
+bool OnPageFault( WHSE_PARTITION* Partition, PX64_INTERRUPT_FRAME Frame, uint32_t ErrorCode ) {
 	auto cr2 = Partition->VirtualProcessor.Registers[ Cr2 ];
 	printf( "OnPageFault: cr2=%llx\n", cr2.Reg64 );
+
+	uintptr_t hva = 0;
+	uintptr_t gva = cr2.Reg64;
+	if ( FAILED( WhSeAllocateGuestVirtualMemory( Partition, &hva, &gva, PAGE_SIZE, WHvMapGpaRangeFlagRead | WHvMapGpaRangeFlagWrite ) ) )
+		return false;
+
+	uintptr_t gpa = 0;
+	WHV_TRANSLATE_GVA_RESULT tr { };
+	auto hresult = WhSeTranslateGvaToGpa( Partition, gva, &gpa, &tr );
+	if ( FAILED( hresult ) )
+		return false;
+
 	return true;
 }
 
-bool OnGeneralProtectionFault( WHSE_PARTITION* Partition ) {
+bool OnGeneralProtectionFault( WHSE_PARTITION* Partition, PX64_INTERRUPT_FRAME Frame, uint32_t ErrorCode ) {
 	return true;
 }
 
@@ -324,7 +336,7 @@ DWORD WINAPI Run( const RUN_OPTIONS& options ) {
 
 	::CopyMemory( shellcode, options.Code, options.CodeSize );
 
-	uintptr_t codeGva = options.BaseAddress != 0 ? options.BaseAddress : 0x10000;
+	uintptr_t codeGva = options.BaseAddress != 0 ? options.BaseAddress : 0;
 	if ( FAILED( WhSeMapHostToGuestVirtualMemory( partition, reinterpret_cast< uintptr_t >( shellcode ), &codeGva, ALIGN_UP( options.CodeSize ), WHvMapGpaRangeFlagRead | WHvMapGpaRangeFlagWrite | WHvMapGpaRangeFlagExecute ) ) )
 		EXIT_WITH_MESSAGE( "Failed to map shellcode" );
 
@@ -337,20 +349,6 @@ DWORD WINAPI Run( const RUN_OPTIONS& options ) {
 		.Stack = stackGva + stackSize - ( 2 * PAGE_SIZE ), // set rsp to the end of the allocated stack range as stack "grows downward" (let 2 page on top for "safety")
 		.Partition = partition
 	};
-
-	uintptr_t gpa { };
-	WHV_TRANSLATE_GVA_RESULT r { };
-	WhSeTranslateGvaToGpa( params.Partition, params.Stack, &gpa, &r );
-	WhSeTranslateGvaToGpa( params.Partition, stackGva, &gpa, &r );
-	WhSeTranslateGvaToGpa( params.Partition, stackGva + PAGE_SIZE, &gpa, &r );
-	WhSeTranslateGvaToGpa( params.Partition, stackGva + (2*PAGE_SIZE), &gpa, &r );
-	WhSeTranslateGvaToGpa( params.Partition, stackGva + stackSize, &gpa, &r );
-	WhSeTranslateGvaToGpa( params.Partition, stackGva + stackSize - ( 2 * PAGE_SIZE ), &gpa, &r );
-	WhSeTranslateGvaToGpa( params.Partition, stackGva + stackSize - ( 10 * PAGE_SIZE ), &gpa, &r );
-	WhSeTranslateGvaToGpa( params.Partition, 0xffff800000002000, &gpa, &r ); // TSS RSP0 GVA (size = 1MiB)
-	WhSeTranslateGvaToGpa( params.Partition, 0xffff800000002000 + PAGE_SIZE, &gpa, &r );
-	WhSeTranslateGvaToGpa( params.Partition, 0xffff800000002000 + ( 2 * PAGE_SIZE ), &gpa, &r );
-	WhSeTranslateGvaToGpa( params.Partition, 0x1000, &gpa, &r );
 
 	printf( "Starting the processor ...\n" );
 

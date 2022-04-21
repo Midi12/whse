@@ -2,6 +2,54 @@
 #include "WinHvUtils.hpp"
 
 #include <memory.h>
+#include "WinHvAllocationTracker.hpp"
+
+HRESULT WhSpSwitchProcessor( PWHSE_VIRTUAL_PROCESSOR VirtualProcessor, WHSE_PROCESSOR_MODE Mode ) {
+	if ( VirtualProcessor == nullptr )
+		return HRESULT_FROM_WIN32( ERROR_INVALID_PARAMETER );
+
+	int ring;
+	int codeSelector;
+	int dataSelector;
+
+	switch ( Mode ) {
+		using enum WHSE_PROCESSOR_MODE;
+	case UserMode:
+		ring = 3;
+		codeSelector = 0x18;
+		dataSelector = 0x20;
+		break;
+	case KernelMode:
+		ring = 0;
+		codeSelector = 0x08;
+		dataSelector = 0x10;
+		break;
+	default:
+		return HRESULT_FROM_WIN32( ERROR_NOT_SUPPORTED );
+	}
+
+	auto registers = VirtualProcessor->Registers;
+
+	// Setup segment registers
+	//
+	registers[ Cs ].Segment.Selector = ( codeSelector | ring );
+	registers[ Cs ].Segment.DescriptorPrivilegeLevel = ring;
+	registers[ Cs ].Segment.Long = 1;
+
+	registers[ Ss ].Segment.Selector = ( dataSelector | ring );
+	registers[ Ss ].Segment.DescriptorPrivilegeLevel = ring;
+	registers[ Ss ].Segment.Default = 1;
+	registers[ Ss ].Segment.Granularity = 1;
+
+	registers[ Ds ] = registers[ Ss ];
+	registers[ Es ] = registers[ Ss ];
+	registers[ Gs ] = registers[ Ss ];
+	//registers[ Fs ] = registers[ Ss ];
+
+	VirtualProcessor->Mode = Mode;
+
+	return S_OK;
+}
 
 /**
  * @brief Create a virtual processor in a partition
@@ -13,7 +61,7 @@
 HRESULT WhSeCreateProcessor( WHSE_PARTITION* Partition, WHSE_PROCESSOR_MODE Mode ) {
 	// TEMPORARY FORCE KERNEL MODE
 	//
-	Mode = WHSE_PROCESSOR_MODE::KernelMode;
+	//Mode = WHSE_PROCESSOR_MODE::KernelMode;
 
 	if ( Partition == nullptr )
 		return HRESULT_FROM_WIN32( ERROR_INVALID_PARAMETER );
@@ -40,47 +88,7 @@ HRESULT WhSeCreateProcessor( WHSE_PARTITION* Partition, WHSE_PROCESSOR_MODE Mode
 	if ( FAILED( hresult ) )
 		return hresult;
 
-	vp->Mode = Mode;
-
-	int ring;
-	int codeSelector;
-	int dataSelector;
-
-	switch ( Mode ) {
-		using enum WHSE_PROCESSOR_MODE;
-	case UserMode:
-		ring = 3;
-		//codeSelector = 0x30;
-		//dataSelector = 0x28;
-		codeSelector = 0x18;
-		dataSelector = 0x20;
-		break;
-	case KernelMode:
-		ring = 0;
-		//codeSelector = 0x10;
-		//dataSelector = 0x18;
-		codeSelector = 0x08;
-		dataSelector = 0x10;
-		break;
-	default:
-		return HRESULT_FROM_WIN32( ERROR_NOT_SUPPORTED );
-	}
-
-	// Setup segment registers
-	//
-	registers[ Cs ].Segment.Selector = ( codeSelector | ring );
-	registers[ Cs ].Segment.DescriptorPrivilegeLevel = ring;
-	registers[ Cs ].Segment.Long = 1;
-
-	registers[ Ss ].Segment.Selector = ( dataSelector | ring );
-	registers[ Ss ].Segment.DescriptorPrivilegeLevel = ring;
-	registers[ Ss ].Segment.Default = 1;
-	registers[ Ss ].Segment.Granularity = 1;
-
-	registers[ Ds ] = registers[ Ss ];
-	registers[ Es ] = registers[ Ss ];
-	registers[ Gs ] = registers[ Ss ];
-	//registers[ Fs ] = registers[ Ss ];
+	hresult = WhSpSwitchProcessor( vp, Mode );
 
 	// Set IF bit
 	//
@@ -140,6 +148,8 @@ HRESULT WhSeGetProcessorRegisters( WHSE_PARTITION* Partition, WHSE_REGISTERS Reg
 	return hresult;
 }
 
+static bool s_switched = false;
+
 /**
  * @brief Run a virtual processor
  *
@@ -161,7 +171,9 @@ HRESULT WhSeRunProcessor( WHSE_PARTITION* Partition, WHSE_VP_EXIT_REASON* ExitRe
 	if ( FAILED( hresult ) )
 		return hresult;
 
-	hresult = WhSeGetProcessorRegisters( Partition, vp->Registers );
+	auto registers = vp->Registers;
+
+	hresult = WhSeGetProcessorRegisters( Partition, registers );
 	if ( FAILED( hresult ) )
 		return hresult;
 
@@ -193,9 +205,67 @@ HRESULT WhSeRunProcessor( WHSE_PARTITION* Partition, WHSE_VP_EXIT_REASON* ExitRe
 
 					auto index = offset / sizeof( uintptr_t );
 
-					auto callback = Partition->IsrCallbacks.Callbacks[ static_cast< uint8_t >( index ) ];
-					if ( callback != nullptr )
-						retry = callback( Partition );
+					auto isr = Partition->IsrCallbacks.Callbacks[ static_cast< uint8_t >( index ) ];
+					if ( isr != nullptr ) {
+						auto rsp = registers[ Rsp ].Reg64;
+
+						PWHSE_ALLOCATION_NODE node = nullptr;
+						hresult = WhSeFindAllocationNodeByGva( Partition, rsp, &node );
+						if ( FAILED( hresult ) )
+							return hresult;
+
+						auto stackOffset = rsp - node->GuestVirtualAddress;
+
+						auto stackHva = node->HostVirtualAddress + stackOffset;
+
+						// if ISR has error code
+						// 
+						auto hasErrorCode = IsrHasErrorCode( index );
+						uint32_t errorCode = 0;
+						if ( hasErrorCode ) {
+							errorCode = *reinterpret_cast< uint32_t* >( stackHva );
+							stackHva += sizeof( uintptr_t );
+						}
+
+						// Pop RIP, CS, RFLAGS and SS:RSP from stack
+						//
+						X64_INTERRUPT_FRAME frame = *reinterpret_cast< X64_INTERRUPT_FRAME* >( stackHva );
+
+						// Fix Rsp
+						//
+						registers[ Rsp ].Reg64 = registers[ Rsp ].Reg64 + sizeof( X64_INTERRUPT_FRAME );
+
+						hresult = WhSeSetProcessorRegisters( Partition, registers );
+						if ( FAILED( hresult ) )
+							return hresult;
+
+						retry = isr( Partition, &frame, errorCode );
+
+						// Restore CPU State
+						//
+						registers[ Rip ].Reg64 = frame.Rip;
+						registers[ Cs ].Segment.Selector = frame.Cs;
+						registers[ Rflags ].Reg64 = frame.Rflags;
+						registers[ Rsp ].Reg64 = frame.Rsp;
+						registers[ Ss ].Segment.Selector = frame.Ss;
+
+						hresult = WhSeSetProcessorRegisters( Partition, registers );
+						if ( FAILED( hresult ) )
+							return hresult;
+
+						// If we switched to CPL = 0 we switch back to CPL = 3
+						if ( s_switched ) {
+							hresult = WhSpSwitchProcessor( vp, WHSE_PROCESSOR_MODE::UserMode );
+							if ( FAILED( hresult ) )
+								return hresult;
+
+							hresult = WhSeSetProcessorRegisters( Partition, registers );
+							if ( FAILED( hresult ) )
+								return hresult;
+
+							s_switched = false;
+						}
+					}	
 					else
 						return HRESULT_FROM_WIN32( ERROR_INTERNAL_ERROR );
 				}
@@ -219,6 +289,22 @@ HRESULT WhSeRunProcessor( WHSE_PARTITION* Partition, WHSE_VP_EXIT_REASON* ExitRe
 			break;
 		case WHvRunVpExitReasonUnrecoverableException:
 			{
+				// If CPL = 3 retry as CPL = 0
+				//
+				if ( vp->ExitContext.VpContext.ExecutionState.Cpl == 3 && !s_switched ) {
+					hresult = WhSpSwitchProcessor( vp, WHSE_PROCESSOR_MODE::KernelMode );
+					if ( FAILED( hresult ) )
+						return hresult;
+
+					hresult = WhSeSetProcessorRegisters( Partition, registers );
+					if ( FAILED( hresult ) )
+						return hresult;
+
+					s_switched = true;
+					retry = true;
+					break;
+				}
+
 				auto callback = reinterpret_cast< WHSE_EXIT_UNRECOVERABLE_EXCEPTION_CALLBACK >( exitCallbacks[ UnrecoverableException ] );
 				if ( callback != nullptr )
 					retry = callback( Partition, &vp->ExitContext.VpContext, nullptr );
