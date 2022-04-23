@@ -58,6 +58,7 @@ enum WHSE_REGISTER : uint8_t {
 	Gdtr,	Ldtr,	Idtr,	Tr,
 	Cr0,	Cr2,	Cr3,	Cr4,
 	Efer,
+	Star,	Lstar,	Cstar, Sfmask,
 
 	NumberOfRegisters
 };
@@ -95,7 +96,11 @@ static constexpr WHSE_REGISTER_NAME g_registers[] = {
 	WHvX64RegisterCr2,
 	WHvX64RegisterCr3,
 	WHvX64RegisterCr4,
-	WHvX64RegisterEfer
+	WHvX64RegisterEfer,
+	WHvX64RegisterStar,
+	WHvX64RegisterLstar,
+	WHvX64RegisterCstar,
+	WHvX64RegisterSfmask
 };
 
 static_assert( RTL_NUMBER_OF( g_registers ) == WHSE_REGISTER::NumberOfRegisters, "number of registers in g_registers != WHSE_REGISTER::NumberOfRegisters" );
@@ -103,6 +108,23 @@ static_assert( RTL_NUMBER_OF( g_registers ) == WHSE_REGISTER::NumberOfRegisters,
 static constexpr uint32_t g_registers_count = RTL_NUMBER_OF( g_registers );
 
 using WHSE_REGISTERS = WHSE_REGISTER_VALUE[ g_registers_count ];
+
+
+#pragma pack( push, 1 )
+typedef struct _GDT_ENTRY {
+	uint16_t LimitLow;
+	uint16_t BaseLow;
+	uint8_t BaseMid;
+	uint8_t Access;
+	uint8_t LimitHigh : 4;
+	uint8_t Flags : 4;
+	uint8_t BaseHigh;
+} GDT_ENTRY, * PGDT_ENTRY;
+#pragma pack( pop )
+
+static_assert( sizeof( GDT_ENTRY ) == 8 );
+
+constexpr static size_t NUMBER_OF_GDT_DESCRIPTORS = 5;
 
 #define X64_TASK_STATE_SEGMENT_NUMBER_OF_ISTS 7
 #define X64_TASK_STATE_SEGMENT_NUMBER_OF_SPS 3
@@ -167,6 +189,18 @@ constexpr uint16_t TssComputeIopbOffset( uint16_t offset ) {
 }
 
 /**
+ * @brief A structure holding data about syscall mechanism
+ */
+struct _WHSE_SYSCALL_DATA {
+	uint32_t Eip;
+	uintptr_t LongModeRip;
+	uintptr_t CompModeRip;
+};
+
+typedef struct _WHSE_SYSCALL_DATA WHSE_SYSCALL_DATA;
+typedef struct _WHSE_SYSCALL_DATA* PWHSE_SYSCALL_DATA;
+
+/**
  * @brief A structure representing a virtual processor
  *
  * This structure represent a virtual processor, its index (number),
@@ -177,6 +211,8 @@ typedef struct _WHSE_VIRTUAL_PROCESSOR {
 	WHSE_PROCESSOR_MODE Mode;
 	WHSE_PROCESSOR_VENDOR Vendor;
 	PX64_TASK_STATE_SEGMENT Tss;
+	PGDT_ENTRY Gdt;
+	WHSE_SYSCALL_DATA SyscallData;
 	WHSE_VP_EXIT_CONTEXT ExitContext;
 	WHSE_REGISTERS Registers; // Must be last as it is an array
 } WHSE_VIRTUAL_PROCESSOR, * PWHSE_VIRTUAL_PROCESSOR;

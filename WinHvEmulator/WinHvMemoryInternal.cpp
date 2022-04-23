@@ -598,6 +598,7 @@ HRESULT WhSiSetupGlobalDescriptorTable( WHSE_PARTITION* Partition, WHSE_REGISTER
 	//Registers[ Tr ].Segment.Base = Registers[ Gdtr ].Table.Base;
 	//Registers[ Tr ].Segment.Limit = Registers[ Gdtr ].Table.Limit;
 
+	Partition->VirtualProcessor.Gdt = reinterpret_cast< PGDT_ENTRY >( gdtHva );
 	Partition->VirtualProcessor.Tss = reinterpret_cast< PX64_TASK_STATE_SEGMENT >( tssHva );
 
 	return S_OK;
@@ -714,6 +715,63 @@ HRESULT WhSiInitializeMemoryArena( WHSE_PARTITION* Partition ) {
 	// our allocated memory regions
 	//
 	InitializeDListHeader( &( arena->AllocatedMemoryBlocks ) );
+
+	return S_OK;
+}
+
+/**
+ * @brief Setup syscalls
+ *
+ * @param Partition The VM partition
+ * @param VirtualAddress The guest virtual address to be translated
+ * @param PhysicalAddress The guest physical address backing the guest virtual address
+ * @param TranslationResult The translation result
+ * @return A result code
+ */
+HRESULT WhSiSetupSyscalls( WHSE_PARTITION* Partition, WHSE_REGISTERS Registers ) {
+	if ( Partition == nullptr )
+		return HRESULT_FROM_WIN32( ERROR_INVALID_PARAMETER );
+
+	if ( Registers == nullptr )
+		return HRESULT_FROM_WIN32( ERROR_INVALID_PARAMETER );
+	
+	uintptr_t syscallTrapHva = 0;
+	auto hresult = WhSiSuggestVirtualAddress( Partition, PAGE_SIZE, &syscallTrapHva, WHSE_PROCESSOR_MODE::KernelMode );
+	if ( FAILED( hresult ) )
+		return hresult;
+
+	WHSE_ALLOCATION_NODE node {
+		.BlockType = MEMORY_BLOCK_TYPE::MemoryBlockVirtual,
+		.HostVirtualAddress = 0,
+		.GuestPhysicalAddress = 0,
+		.GuestVirtualAddress = syscallTrapHva,
+		.Size = PAGE_SIZE
+	};
+
+	hresult = WhSeInsertAllocationTrackingNode( Partition, node );
+	if ( FAILED( hresult ) )
+		return hresult;
+
+	auto vp = &Partition->VirtualProcessor;
+
+	vp->SyscallData.Eip = 0; // Must be ZERO
+	vp->SyscallData.LongModeRip = syscallTrapHva;
+	vp->SyscallData.CompModeRip = syscallTrapHva + sizeof( uintptr_t );
+
+	Registers[ Star ].Reg64 =
+		// base selector for SYSRET CS / SS : bits 63:48
+		//
+		( static_cast< uint64_t >( 0x0018 ) /*R3 CS Selector*/ << 48 ) 
+		// base selector for SYSCALL CS / SS : bits 47:32
+		//
+		| ( static_cast< uint64_t >( 0x0008 ) /*R0 CS Selector*/ << 32 )
+		// target EIP : bits 31:0
+		// This field is reserved in Long Mode
+		//
+		| vp->SyscallData.Eip;
+	Registers[ Lstar ].Reg64 = vp->SyscallData.LongModeRip;
+	Registers[ Cstar ].Reg64 = vp->SyscallData.CompModeRip;
+	//Registers[ Sfmask ].Reg64 = 0;
 
 	return S_OK;
 }

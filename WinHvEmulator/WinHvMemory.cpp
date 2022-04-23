@@ -481,9 +481,9 @@ HRESULT WhSeInitializeMemoryLayout( WHSE_PARTITION* Partition ) {
 	//
 	registers[ Cr4 ].Reg64 = ( registers[ Cr4 ].Reg64 | ( 1ULL << 5 ) ) & ~( 1 << 24 );
 
-	// Enable Long Mode
+	// Enable Long Mode and Syscall
 	//
-	registers[ Efer ].Reg64 = ( registers[ Efer ].Reg64 | ( 1ULL << 8 ) ) & ~( 1 << 16 );
+	registers[ Efer ].Reg64 = ( registers[ Efer ].Reg64 | ( 1ULL << 0 ) | ( 1ULL << 8 ) ) & ~( 1 << 16 );
 
 	// Update registers at this point
 	//
@@ -500,6 +500,12 @@ HRESULT WhSeInitializeMemoryLayout( WHSE_PARTITION* Partition ) {
 	// Setup IDT
 	//
 	hresult = WhSiSetupInterruptDescriptorTable( Partition, registers );
+	if ( FAILED( hresult ) )
+		return hresult;
+
+	// Setup Syscall
+	//
+	hresult = WhSiSetupSyscalls( Partition, registers );
 	if ( FAILED( hresult ) )
 		return hresult;
 

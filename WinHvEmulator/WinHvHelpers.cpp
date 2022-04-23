@@ -53,7 +53,7 @@ HRESULT WhSeGetLastHresult() {
 }
 
 #define ARCH_X64_HIGHESTORDER_BIT_IMPLEMENTED 47
-#define ARCH_X64_CANONICAL_BITMASK  ~( ( 1ul << ( ARCH_X64_HIGHESTORDER_BIT_IMPLEMENTED + 1 ) ) - 1 )
+#define ARCH_X64_CANONICAL_BITMASK  ~( ( 1ull << ( ARCH_X64_HIGHESTORDER_BIT_IMPLEMENTED + 1 ) ) - 1 )
 
 /**
  * @brief An helper function to know if a virtual address is canonical
@@ -61,7 +61,7 @@ HRESULT WhSeGetLastHresult() {
  * @return A boolean indicating if the virtual address <VirtualAddress> is canonical (true) or not (false)
  */
 bool WhSeIsCanonicalAddress( uintptr_t VirtualAddress ) {
-	bool highest_bit_set = ( ( VirtualAddress & ( 1ul << ARCH_X64_HIGHESTORDER_BIT_IMPLEMENTED ) ) >> ARCH_X64_HIGHESTORDER_BIT_IMPLEMENTED ) == 1;
+	bool highest_bit_set = ( ( VirtualAddress & ( 1ull << ARCH_X64_HIGHESTORDER_BIT_IMPLEMENTED ) ) >> ARCH_X64_HIGHESTORDER_BIT_IMPLEMENTED ) == 1;
 
 	uintptr_t masked = VirtualAddress & ARCH_X64_CANONICAL_BITMASK;
 

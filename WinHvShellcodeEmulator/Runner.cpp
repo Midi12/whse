@@ -26,12 +26,12 @@ constexpr size_t ALIGN_UP( size_t x ) {
 
 bool OnMemoryAccessExit( _WHSE_PARTITION* Partition, WHV_VP_EXIT_CONTEXT* VpContext, WHSE_MEMORY_ACCESS_CONTEXT* ExitContext ) {
 	printf( "HandleMemoryAccessExit\n" );
-	return true;
+	return false;
 }
 
 bool OnIoPortAccessExit( _WHSE_PARTITION* Partition, WHV_VP_EXIT_CONTEXT* VpContext, WHSE_IO_PORT_ACCESS_CONTEXT* ExitContext ) {
 	printf( "IoPortAccessCallback\n" );
-	return true;
+	return false;
 }
 
 #define DumpGpr( holder, name ) \

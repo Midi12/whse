@@ -53,22 +53,6 @@ static_assert( sizeof( IDT_ENTRY ) == 16 );
 constexpr static size_t NUMBER_OF_IDT_DESCRIPTORS = 256;
 
 #pragma pack( push, 1 )
-typedef struct _GDT_ENTRY {
-	uint16_t LimitLow;
-	uint16_t BaseLow;
-	uint8_t BaseMid;
-	uint8_t Access;
-    uint8_t LimitHigh : 4;
-    uint8_t Flags : 4;
-	uint8_t BaseHigh;
-} GDT_ENTRY, * PGDT_ENTRY;
-#pragma pack( pop )
-
-static_assert( sizeof( GDT_ENTRY ) == 8 );
-
-constexpr static size_t NUMBER_OF_GDT_DESCRIPTORS = 5;
-
-#pragma pack( push, 1 )
 struct _X64_TSS_ENTRY {
     struct _GDT_ENTRY GdtEntry;
     uint32_t BaseHigh;
@@ -117,5 +101,9 @@ HRESULT WhSiSetupInterruptDescriptorTable( WHSE_PARTITION* Partition, WHSE_REGIS
 // Setup memory arena
 //
 HRESULT WhSiInitializeMemoryArena( WHSE_PARTITION* Partition );
+
+// Setup syscalls
+//
+HRESULT WhSiSetupSyscalls( WHSE_PARTITION* Partition, WHSE_REGISTERS Registers );
 
 #endif // !WINHVMEMORYINTERNAL_HPP

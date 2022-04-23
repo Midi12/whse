@@ -119,7 +119,8 @@ HRESULT WhSeSetProcessorRegisters( WHSE_PARTITION* Partition, WHSE_REGISTERS Reg
 	if ( vp->Registers != Registers )
 		memcpy_s( vp->Registers, sizeof( decltype( *vp->Registers ) ), Registers, sizeof( decltype( *vp->Registers ) ) );
 
-	return ::WHvSetVirtualProcessorRegisters( Partition->Handle, vp->Index, g_registers, g_registers_count, vp->Registers );
+	auto hresult = ::WHvSetVirtualProcessorRegisters( Partition->Handle, vp->Index, g_registers, g_registers_count, vp->Registers );
+	return hresult;
 }
 
 /**
@@ -203,71 +204,94 @@ HRESULT WhSeRunProcessor( WHSE_PARTITION* Partition, WHSE_VP_EXIT_REASON* ExitRe
 					//
 					auto offset = vp->ExitContext.MemoryAccess.Gva & 0x00000000'00000fff;
 
-					auto index = offset / sizeof( uintptr_t );
+					auto index = static_cast< uint8_t >( offset / sizeof( uintptr_t ) );
 
-					auto isr = Partition->IsrCallbacks.Callbacks[ static_cast< uint8_t >( index ) ];
-					if ( isr != nullptr ) {
-						auto rsp = registers[ Rsp ].Reg64;
+					auto rsp = registers[ Rsp ].Reg64;
 
-						PWHSE_ALLOCATION_NODE node = nullptr;
-						hresult = WhSeFindAllocationNodeByGva( Partition, rsp, &node );
-						if ( FAILED( hresult ) )
-							return hresult;
+					PWHSE_ALLOCATION_NODE node = nullptr;
+					hresult = WhSeFindAllocationNodeByGva( Partition, rsp, &node );
+					if ( FAILED( hresult ) )
+						return hresult;
 
-						auto stackOffset = rsp - node->GuestVirtualAddress;
+					auto stackOffset = rsp - node->GuestVirtualAddress;
 
-						auto stackHva = node->HostVirtualAddress + stackOffset;
+					auto stackHva = node->HostVirtualAddress + stackOffset;
 
-						// if ISR has error code
-						// 
-						auto hasErrorCode = IsrHasErrorCode( index );
-						uint32_t errorCode = 0;
-						if ( hasErrorCode ) {
-							errorCode = *reinterpret_cast< uint32_t* >( stackHva );
-							stackHva += sizeof( uintptr_t );
-						}
+					// if ISR has error code
+					// 
+					auto hasErrorCode = IsrHasErrorCode( index );
+					uint32_t errorCode = 0;
+					if ( hasErrorCode ) {
+						errorCode = *reinterpret_cast< uint32_t* >( stackHva );
+						stackHva += sizeof( uintptr_t );
+					}
 
-						// Pop RIP, CS, RFLAGS and SS:RSP from stack
+					// Pop RIP, CS, RFLAGS and SS:RSP from stack
+					//
+					X64_INTERRUPT_FRAME frame = *reinterpret_cast< X64_INTERRUPT_FRAME* >( stackHva );
+
+					// Fix Rsp
+					//
+					registers[ Rsp ].Reg64 = registers[ Rsp ].Reg64 + sizeof( X64_INTERRUPT_FRAME );
+
+					hresult = WhSeSetProcessorRegisters( Partition, registers );
+					if ( FAILED( hresult ) )
+						return hresult;
+
+					// if the #PF Rip is matching the Syscall Rip
+					// Handle syscall
+					//
+					if ( !s_switched && index == 0x0e && frame.Rip == vp->SyscallData.LongModeRip ) {
+						// Save return Rip
 						//
-						X64_INTERRUPT_FRAME frame = *reinterpret_cast< X64_INTERRUPT_FRAME* >( stackHva );
+						auto rip = registers[ Rcx ].Reg64;
 
-						// Fix Rsp
+						vp->SyscallData.FastSystemCallCallback( Partition, rip, registers );
+
+						// Switch to CPL=3
 						//
-						registers[ Rsp ].Reg64 = registers[ Rsp ].Reg64 + sizeof( X64_INTERRUPT_FRAME );
 
-						hresult = WhSeSetProcessorRegisters( Partition, registers );
-						if ( FAILED( hresult ) )
-							return hresult;
-
-						retry = isr( Partition, &frame, errorCode );
-
-						// Restore CPU State
+						// Adjust Rip
 						//
-						registers[ Rip ].Reg64 = frame.Rip;
-						registers[ Cs ].Segment.Selector = frame.Cs;
-						registers[ Rflags ].Reg64 = frame.Rflags;
-						registers[ Rsp ].Reg64 = frame.Rsp;
-						registers[ Ss ].Segment.Selector = frame.Ss;
 
-						hresult = WhSeSetProcessorRegisters( Partition, registers );
-						if ( FAILED( hresult ) )
-							return hresult;
-
-						// If we switched to CPL = 0 we switch back to CPL = 3
-						if ( s_switched ) {
-							hresult = WhSpSwitchProcessor( vp, WHSE_PROCESSOR_MODE::UserMode );
-							if ( FAILED( hresult ) )
-								return hresult;
-
-							hresult = WhSeSetProcessorRegisters( Partition, registers );
-							if ( FAILED( hresult ) )
-								return hresult;
-
-							s_switched = false;
-						}
-					}	
+						retry = true;
+					}
+					// Handle interrupt
+					//
 					else
-						return HRESULT_FROM_WIN32( ERROR_INTERNAL_ERROR );
+					{
+						auto isr = Partition->IsrCallbacks.Callbacks[ index ];
+						if ( isr != nullptr ) {
+							retry = isr( Partition, &frame, errorCode );
+						}
+						else
+							return HRESULT_FROM_WIN32( ERROR_INTERNAL_ERROR );
+					}
+
+					// Restore CPU State
+					//
+					registers[ Rip ].Reg64 = frame.Rip;
+					registers[ Cs ].Segment.Selector = static_cast< uint16_t >( frame.Cs );
+					registers[ Rflags ].Reg64 = frame.Rflags;
+					registers[ Rsp ].Reg64 = frame.Rsp;
+					registers[ Ss ].Segment.Selector = static_cast< uint16_t >( frame.Ss );
+
+					hresult = WhSeSetProcessorRegisters( Partition, registers );
+					if ( FAILED( hresult ) )
+						return hresult;
+
+					// If we switched to CPL = 0 we switch back to CPL = 3
+					if ( s_switched ) {
+						hresult = WhSpSwitchProcessor( vp, WHSE_PROCESSOR_MODE::UserMode );
+						if ( FAILED( hresult ) )
+							return hresult;
+
+						hresult = WhSeSetProcessorRegisters( Partition, registers );
+						if ( FAILED( hresult ) )
+							return hresult;
+
+						s_switched = false;
+					}
 				}
 				else {
 					// Handle normally
