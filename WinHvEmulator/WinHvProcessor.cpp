@@ -244,15 +244,43 @@ HRESULT WhSeRunProcessor( WHSE_PARTITION* Partition, WHSE_VP_EXIT_REASON* ExitRe
 					if ( !s_switched && index == 0x0e && frame.Rip == vp->SyscallData.LongModeRip ) {
 						// Save return Rip
 						//
-						auto rip = registers[ Rcx ].Reg64;
+						auto returnRip = registers[ Rcx ].Reg64;
 
-						vp->SyscallData.FastSystemCallCallback( Partition, rip, registers );
+						// Update Rip
+						//
+						registers[ Rip ].Reg64 = frame.Rip;
+						
+						// Update Rsp with KM stack
+						//
+						auto kernelStack = vp->Tss->Rsp0;
+						registers[ Rsp ].Reg64 = kernelStack;
+
+						hresult = WhSeSetProcessorRegisters( Partition, registers );
+						if ( FAILED( hresult ) )
+							return hresult;
+
+						auto syscall = vp->SyscallData.FastSystemCallCallback;
+						if ( syscall )
+							syscall( Partition, registers );
+						else
+							return HRESULT_FROM_WIN32( ERROR_INTERNAL_ERROR );
 
 						// Switch to CPL=3
 						//
+						if ( FAILED( WhSpSwitchProcessor( vp, WHSE_PROCESSOR_MODE::UserMode ) ) )
+							return HRESULT_FROM_WIN32( ERROR_INTERNAL_ERROR );
 
 						// Adjust Rip
 						//
+						registers[ Rip ].Reg64 = returnRip;
+
+						// Update Rsp with UM stack
+						//
+						registers[ Rsp ].Reg64 = frame.Rsp;
+
+						hresult = WhSeSetProcessorRegisters( Partition, registers );
+						if ( FAILED( hresult ) )
+							return hresult;
 
 						retry = true;
 					}
@@ -266,31 +294,31 @@ HRESULT WhSeRunProcessor( WHSE_PARTITION* Partition, WHSE_VP_EXIT_REASON* ExitRe
 						}
 						else
 							return HRESULT_FROM_WIN32( ERROR_INTERNAL_ERROR );
-					}
 
-					// Restore CPU State
-					//
-					registers[ Rip ].Reg64 = frame.Rip;
-					registers[ Cs ].Segment.Selector = static_cast< uint16_t >( frame.Cs );
-					registers[ Rflags ].Reg64 = frame.Rflags;
-					registers[ Rsp ].Reg64 = frame.Rsp;
-					registers[ Ss ].Segment.Selector = static_cast< uint16_t >( frame.Ss );
-
-					hresult = WhSeSetProcessorRegisters( Partition, registers );
-					if ( FAILED( hresult ) )
-						return hresult;
-
-					// If we switched to CPL = 0 we switch back to CPL = 3
-					if ( s_switched ) {
-						hresult = WhSpSwitchProcessor( vp, WHSE_PROCESSOR_MODE::UserMode );
-						if ( FAILED( hresult ) )
-							return hresult;
+						// Restore CPU State
+						//
+						registers[ Rip ].Reg64 = frame.Rip;
+						registers[ Cs ].Segment.Selector = static_cast< uint16_t >( frame.Cs );
+						registers[ Rflags ].Reg64 = frame.Rflags;
+						registers[ Rsp ].Reg64 = frame.Rsp;
+						registers[ Ss ].Segment.Selector = static_cast< uint16_t >( frame.Ss );
 
 						hresult = WhSeSetProcessorRegisters( Partition, registers );
 						if ( FAILED( hresult ) )
 							return hresult;
 
-						s_switched = false;
+						// If we switched to CPL = 0 we switch back to CPL = 3
+						if ( s_switched ) {
+							hresult = WhSpSwitchProcessor( vp, WHSE_PROCESSOR_MODE::UserMode );
+							if ( FAILED( hresult ) )
+								return hresult;
+
+							hresult = WhSeSetProcessorRegisters( Partition, registers );
+							if ( FAILED( hresult ) )
+								return hresult;
+
+							s_switched = false;
+						}
 					}
 				}
 				else {

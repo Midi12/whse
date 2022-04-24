@@ -7,10 +7,10 @@
 [x] Handle page fault/gp exception/... through custom GDT+IDT
 [x] Memory management through memory block 
 [x] Add TSS
-[ ] Handle syscalls
+[x] Handle syscalls
 [ ] New shellcode for debug -> test all callbacks
 [ ] Check all code path for clean memory handling
-[ ] Recode all in pure C (cross platform: MSVC, Clang)
+[ ] Recode all in pure C (cross compiler: MSVC, Clang)
 	[ ] Add error handling for the doubly linked list api
 [ ] Benchmarks
 	[ ] Find C Benchmark library

@@ -188,6 +188,10 @@ constexpr uint16_t TssComputeIopbOffset( uint16_t offset ) {
 	return offset != X64_TASK_STATE_SEGMENT_IOPB_NONE ? offset : sizeof( X64_TASK_STATE_SEGMENT );
 }
 
+struct _WHSE_PARTITION;
+
+typedef void ( *WHSE_FASTSYSTEMCALL_CALLBACK )( _WHSE_PARTITION* Partition, WHSE_REGISTERS Registers );
+
 /**
  * @brief A structure holding data about syscall mechanism
  */
@@ -195,6 +199,7 @@ struct _WHSE_SYSCALL_DATA {
 	uint32_t Eip;
 	uintptr_t LongModeRip;
 	uintptr_t CompModeRip;
+	WHSE_FASTSYSTEMCALL_CALLBACK FastSystemCallCallback;
 };
 
 typedef struct _WHSE_SYSCALL_DATA WHSE_SYSCALL_DATA;
@@ -349,8 +354,6 @@ enum WHSE_EXIT_CALLBACK_SLOT : uint8_t {
 #define WHSE_CALLBACK_RETURNTYPE bool
 
 typedef void * WHSE_CALLBACK;
-
-struct _WHSE_PARTITION;
 
 typedef WHV_MEMORY_ACCESS_CONTEXT WHSE_MEMORY_ACCESS_CONTEXT;
 typedef WHSE_CALLBACK_RETURNTYPE ( WHSECALLBACKAPI WHSE_EXIT_MEMORYACCESS_CALLBACK )( _WHSE_PARTITION* Partition, WHV_VP_EXIT_CONTEXT* VpContext, WHSE_MEMORY_ACCESS_CONTEXT* Context );

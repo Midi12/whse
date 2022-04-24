@@ -187,6 +187,10 @@ bool OnGeneralProtectionFault( WHSE_PARTITION* Partition, PX64_INTERRUPT_FRAME F
 	return true;
 }
 
+void FastSystemCallHandler( WHSE_PARTITION* Partition, WHSE_REGISTERS Register ) {
+	printf( "FastSystemCallHandler: rip=%llx\n", Register[ Rip ].Reg64 );
+}
+
 // Execute a shellcode through a virtual processor
 //
 DWORD WINAPI ExecuteThread( LPVOID lpParameter ) {
@@ -232,6 +236,10 @@ DWORD WINAPI ExecuteThread( LPVOID lpParameter ) {
 	//
 	partition->IsrCallbacks.u.PageFaultCallback = &OnPageFault;
 	partition->IsrCallbacks.u.GeneralProtectionFaultCallback = &OnGeneralProtectionFault;
+
+	// Syscall handler
+	//
+	partition->VirtualProcessor.SyscallData.FastSystemCallCallback = &FastSystemCallHandler;
 
 	// *---------------*
 	// | START TESTING |
